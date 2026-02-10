@@ -6,12 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "river:bridge": "node scripts/lan-bridge.mjs",
+    "river:interfaces": "node scripts/lan-bridge.mjs --list"
   },
   "dependencies": {
     "next": "16.1.6",
+    "p5": "^2.2.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
