@@ -39,107 +39,6 @@ const EVENT_TYPES: Record<string, number> = {
   hierarchy: 5,
 };
 
-const SHOW_RIVER = false;
-
-// ─── Existing river shader (unchanged) ────────────────────────────────────────
-
-const VERTEX_SHADER = `
-precision mediump float;
-
-attribute vec3 aPosition;
-attribute vec2 aTexCoord;
-
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-
-varying vec2 vUv;
-
-void main() {
-  vUv = aTexCoord;
-  gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
-}
-`;
-
-const FRAGMENT_SHADER = `
-precision mediump float;
-
-varying vec2 vUv;
-
-uniform vec2 u_resolution;
-uniform float u_time;
-uniform float u_activity;
-uniform float u_layer;
-uniform float u_depth;
-uniform float u_speed;
-uniform vec3 u_colorA;
-uniform vec3 u_colorB;
-uniform vec3 u_colorC;
-uniform float u_exposure;
-uniform float u_pulseCount;
-uniform vec4 u_pulses[8];
-
-float hash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
-}
-
-vec3 pulseColor(float t) {
-  if (t < 0.5) return vec3(0.8, 0.45, 0.95);
-  if (t < 1.5) return vec3(0.3, 0.7, 1.0);
-  if (t < 2.5) return vec3(0.9, 0.8, 0.35);
-  if (t < 3.5) return vec3(1.0, 0.4, 0.3);
-  if (t < 4.5) return vec3(0.65, 1.0, 0.6);
-  return vec3(0.7, 0.55, 1.0);
-}
-
-void main() {
-  vec2 uv = vUv;
-  vec2 aspect = vec2(u_resolution.x / u_resolution.y, 1.0);
-  vec2 pos = (uv - 0.5) * aspect;
-
-  float time = u_time * u_speed;
-  float activity = clamp(u_activity, 0.0, 1.0);
-
-  float center = 0.05 * sin(pos.x * 1.6 + time * 0.12 + u_layer);
-
-  float thickness = 0.15 + 0.03 * u_layer;
-  float dist = abs(pos.y - center);
-  float body = smoothstep(thickness, thickness * 0.6, dist);
-
-  float edge = smoothstep(thickness * 0.75, thickness * 0.2, dist);
-  float shimmer = pow(edge, 2.0) * 0.15;
-
-  float breathing = 0.6 + 0.4 * sin(u_time * 0.25 + u_layer * 1.7);
-
-  vec3 base = mix(u_colorA, u_colorB, 0.5 + 0.5 * sin(pos.x * 1.2 + time * 0.12));
-  base = mix(base, u_colorC, 0.4);
-
-  float glow = pow(body, 1.25) * (0.7 + 0.9 * shimmer);
-  vec3 color = base * (0.22 + 0.38 * breathing) * body;
-  color += base * glow * (0.32 + u_depth * 0.2);
-
-  float rays = pow(max(0.0, 1.0 - abs(pos.x) * 1.8), 2.0);
-  rays *= 0.2 * activity;
-  color += u_colorB * rays * 0.08;
-
-  vec3 pulse = vec3(0.0);
-  for (int i = 0; i < 8; i++) {
-    float active = step(float(i), u_pulseCount - 1.0);
-    vec4 data = u_pulses[i];
-    float age = u_time - data.x;
-    float alive = active * step(0.0, age) * step(age, 10.0);
-    float ripple = sin((pos.x * 6.0 - age * 1.8 + data.w) * 6.283);
-    float band = exp(-abs(pos.y - center) * 15.0) * (0.5 + 0.5 * ripple);
-    pulse += pulseColor(data.y) * band * data.z * exp(-age * 0.35) * alive;
-  }
-
-  color += pulse * 0.2;
-
-  float alpha = smoothstep(0.0, 0.85, body + glow) * (0.14 + 0.1 * activity);
-  color *= u_exposure;
-  gl_FragColor = vec4(color, alpha);
-}
-`;
-
 // ─── TCP throughput tracker ────────────────────────────────────────────────────
 // Maintains a 3-second rolling window of byte counts and converts to a
 // normalised 0-1 intensity value.
@@ -279,8 +178,6 @@ export default function CosmicRiver() {
       ).pushRiverEvent = addPulse;
 
       const sketch = (p: p5) => {
-        let riverShader: p5.Shader;
-
         const particles: {
           x: number;
           y: number;
@@ -303,10 +200,6 @@ export default function CosmicRiver() {
         p.setup = () => {
           p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
           p.noStroke();
-
-          if (SHOW_RIVER) {
-            riverShader = p.createShader(VERTEX_SHADER, FRAGMENT_SHADER);
-          }
           initParticles();
         };
 
@@ -351,60 +244,6 @@ export default function CosmicRiver() {
 
           p.clear();
           p.background(1, 2, 6);
-
-          // ── River shader layers (unchanged) ────────────────────────────────
-          if (SHOW_RIVER) {
-            p.shader(riverShader);
-            p.blendMode(p.BLEND);
-
-            const layerColors = [
-              [0.08, 0.16, 0.26],
-              [0.1, 0.18, 0.3],
-              [0.12, 0.2, 0.32],
-              [0.14, 0.22, 0.34],
-            ];
-
-            for (let i = 0; i < 4; i += 1) {
-              const depth = i / 4;
-              const colorA = layerColors[i];
-              const colorB = layerColors[(i + 1) % layerColors.length];
-              const colorC = layerColors[(i + 2) % layerColors.length];
-
-              riverShader.setUniform("u_resolution", [p.width, p.height]);
-              riverShader.setUniform("u_time", now / 1000);
-              riverShader.setUniform("u_activity", activity);
-              riverShader.setUniform("u_layer", i * 0.7 + 0.2);
-              riverShader.setUniform("u_depth", depth);
-              riverShader.setUniform("u_speed", 0.25 + i * 0.08);
-              riverShader.setUniform("u_colorA", colorA);
-              riverShader.setUniform("u_colorB", colorB);
-              riverShader.setUniform("u_colorC", colorC);
-              riverShader.setUniform("u_exposure", 0.25);
-              riverShader.setUniform("u_pulseCount", pulses.length);
-              riverShader.setUniform(
-                "u_pulses",
-                pulses.flatMap((pulse) => [
-                  pulse.time,
-                  pulse.type,
-                  pulse.strength,
-                  pulse.seed,
-                ]),
-              );
-
-              p.blendMode(p.BLEND);
-              p.rect(-p.width / 2, -p.height / 2, p.width, p.height);
-            }
-
-            p.resetShader();
-            p.blendMode(p.ADD);
-            p.noStroke();
-            p.fill(80, 140, 255, 7);
-            p.ellipse(0, 0, p.width * 1.1, p.height * 0.55);
-            p.fill(140, 90, 255, 4);
-            p.ellipse(0, -p.height * 0.1, p.width * 0.8, p.height * 0.35);
-          }
-
-          // (TCP vapor rendered on overlay canvas — see vaporRef)
 
           // ── Particles ──────────────────────────────────────────────────────
           p.blendMode(p.ADD);

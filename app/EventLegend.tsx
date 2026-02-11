@@ -36,11 +36,16 @@ export default function EventLegend() {
       <li className="flex items-center gap-3">
         <span className="inline-flex h-3 w-3 items-center justify-center">
           <svg viewBox="0 0 20 20" className="h-3 w-3">
-            <polygon points="10,16 2,4 18,4" fill="rgb(255,120,200)" />
+            <polyline
+              points="2,6 10,16 18,6"
+              fill="none"
+              stroke="rgb(190,140,255)"
+              strokeWidth="2"
+            />
           </svg>
         </span>
-        <span>DNS queries</span>
-        <span className="ml-auto text-cyan-100/80">{counts.dns}</span>
+        <span>Protocol depth</span>
+        <span className="ml-auto text-cyan-100/80">{counts.hierarchy}</span>
       </li>
       <li className="flex items-center gap-3">
         <span className="inline-flex h-3 w-3 items-center justify-center">
@@ -50,6 +55,15 @@ export default function EventLegend() {
         </span>
         <span>TCP flow</span>
         <span className="ml-auto text-cyan-100/80">{counts.tcp}</span>
+      </li>
+      <li className="flex items-center gap-3">
+        <span className="inline-flex h-3 w-3 items-center justify-center">
+          <svg viewBox="0 0 20 20" className="h-3 w-3">
+            <polygon points="10,16 2,4 18,4" fill="rgb(255,120,200)" />
+          </svg>
+        </span>
+        <span>DNS queries</span>
+        <span className="ml-auto text-cyan-100/80">{counts.dns}</span>
       </li>
       <li className="flex items-center gap-3">
         <span className="inline-flex h-3 w-3 items-center justify-center">
@@ -82,20 +96,6 @@ export default function EventLegend() {
         </span>
         <span>Malformed packet</span>
         <span className="ml-auto text-cyan-100/80">{counts.malformed}</span>
-      </li>
-      <li className="flex items-center gap-3">
-        <span className="inline-flex h-3 w-3 items-center justify-center">
-          <svg viewBox="0 0 20 20" className="h-3 w-3">
-            <polyline
-              points="2,6 10,16 18,6"
-              fill="none"
-              stroke="rgb(190,140,255)"
-              strokeWidth="2"
-            />
-          </svg>
-        </span>
-        <span>Protocol depth</span>
-        <span className="ml-auto text-cyan-100/80">{counts.hierarchy}</span>
       </li>
     </ul>
   );
