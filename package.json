@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "river:bridge": "node scripts/lan-bridge.mjs",
-    "river:interfaces": "node scripts/lan-bridge.mjs --list"
+    "river:interfaces": "node scripts/lan-bridge.mjs --list",
+    "river:test": "node scripts/test-tcp-vapor.mjs"
   },
   "dependencies": {
     "next": "16.1.6",

@@ -77,6 +77,22 @@ if (listOnly) {
     return true;
   };
 
+  // ── TCP byte accumulator ──────────────────────────────────────────────────
+  // Collects raw frame bytes for TCP packets and flushes a { tcpBytes } message
+  // to all clients at a fixed interval. This decouples the byte-rate signal
+  // from the per-packet event rate limiter so the vapor shader always gets
+  // accurate throughput data regardless of RIVER_RATE_MS throttling.
+  const TCP_FLUSH_MS = Number(process.env.RIVER_TCP_FLUSH_MS ?? 200);
+  let tcpByteAccumulator = 0;
+
+  const flushTcpBytes = () => {
+    if (tcpByteAccumulator > 0 && clients.size > 0) {
+      sendEvent({ tcpBytes: tcpByteAccumulator });
+      tcpByteAccumulator = 0;
+    }
+  };
+  setInterval(flushTcpBytes, TCP_FLUSH_MS);
+
   const tsharkArgs = [
     "-l",
     "-n",
@@ -84,6 +100,8 @@ if (listOnly) {
     "ek",
     "-e",
     "frame.time_epoch",
+    "-e",
+    "frame.len",          // ← raw frame size in bytes for TCP throughput
     "-e",
     "frame.protocols",
     "-e",
@@ -132,6 +150,7 @@ if (listOnly) {
         const protocols = getLayer(["frame.protocols", "frame_protocols"]) ?? "";
         const protoCol = getLayer(["_ws.col.Protocol", "_ws_col_Protocol"]) ?? "";
         const src = getLayer(["ip.src", "ip_src"]);
+        const frameLen = Number(getLayer(["frame.len", "frame_len"]) ?? 0);
         const tcpFlagsSyn = getLayer(["tcp.flags.syn", "tcp_flags_syn"]) === "1";
         const tcpFlagsAck = getLayer(["tcp.flags.ack", "tcp_flags_ack"]) === "1";
         const dnsQuery = getLayer(["dns.qry.name", "dns_qry_name"]);
@@ -174,6 +193,13 @@ if (listOnly) {
         if (protocols.split(":").length >= 5 || protoCol.includes("TLS")) {
           type = type === "dns" ? "dns" : "hierarchy";
           strength = Math.max(strength, 1.2);
+        }
+
+        // ── Accumulate TCP bytes for the vapor wave ─────────────────────────
+        // Count any frame that travels over TCP (including TLS, HTTP/2, etc.)
+        // regardless of whether it also fired a visual event above.
+        if (tcpPort && frameLen > 0) {
+          tcpByteAccumulator += frameLen;
         }
 
         if (shouldSend(type)) {

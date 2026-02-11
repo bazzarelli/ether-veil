@@ -1,20 +1,17 @@
 import EventLegend from "./EventLegend";
-import RiverSketch from "./RiverSketch";
+import CosmicRiver from "./CosmicRiver";
 
 export default function Home() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950">
       <div className="absolute inset-0">
-        <RiverSketch />
+        <CosmicRiver />
       </div>
 
       <div className="relative z-10 flex min-h-screen flex-col justify-between px-8 py-10 text-slate-100">
         <header className="flex max-w-4xl flex-col gap-4">
-          <p className="text-xs uppercase tracking-[0.35em] text-cyan-200/70">
-            Wireshark Local Network Activity
-          </p>
-          <p className="text-base leading-relaxed text-slate-200/80 sm:text-lg">
-            packet events visualiized
+          <p className="text-sm uppercase tracking-[0.35em] text-cyan-200/70">
+            Wireshark Network Activity
           </p>
         </header>
 
