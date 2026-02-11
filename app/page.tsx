@@ -1,3 +1,4 @@
+import EventLegend from "./EventLegend";
 import RiverSketch from "./RiverSketch";
 
 export default function Home() {
@@ -10,40 +11,21 @@ export default function Home() {
       <div className="relative z-10 flex min-h-screen flex-col justify-between px-8 py-10 text-slate-100">
         <header className="flex max-w-4xl flex-col gap-4">
           <p className="text-xs uppercase tracking-[0.35em] text-cyan-200/70">
-            Shark Cosmic River
+            Wireshark Local Network Activity
           </p>
-          <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl">
-            Network flow translated into living light.
-          </h1>
           <p className="text-base leading-relaxed text-slate-200/80 sm:text-lg">
-            Packet events become slow-moving ribbons, drifting mist, and
-            luminous ripples.
+            packet events visualiized
           </p>
         </header>
 
         <section className="mt-10 grid max-w-4xl gap-6 text-sm text-slate-200/80 sm:grid-cols-2">
           <div className="space-y-3">
-            <h2 className="text-xs uppercase tracking-[0.3em] text-cyan-200/70">
-              Event Palette
-            </h2>
-            <p className="leading-relaxed">
-              Map `tcp`, `udp`, `dns`, `portscan`, `malformed`, and `hierarchy`
-              to flashes, streaks, or enlargements. Idle fades after 10 seconds
-              without activity; subtle ripples appear every 60–90 seconds.
-            </p>
-            <ul className="space-y-1 text-xs uppercase tracking-[0.2em] text-slate-300/70">
-              <li>Inverted pink triangle: DNS queries</li>
-              <li>Cyan square: TCP flow</li>
-              <li>Blue circle: UDP burst</li>
-              <li>Red diamond: Port scan</li>
-              <li>Amber burst: Malformed packet</li>
-              <li>Violet chevron: Deep protocol stack / control plane</li>
-            </ul>
+            <EventLegend />
           </div>
         </section>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,70,100,0.35),_transparent_55%),radial-gradient(circle_at_30%_80%,_rgba(60,20,90,0.35),_transparent_50%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(14,70,100,0.35),transparent_55%),radial-gradient(circle_at_30%_80%,rgba(60,20,90,0.35),transparent_50%)]" />
     </div>
   );
 }

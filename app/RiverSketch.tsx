@@ -38,6 +38,8 @@ const EVENT_TYPES: Record<string, number> = {
   hierarchy: 5,
 };
 
+const SHOW_RIVER = false;
+
 const VERTEX_SHADER = `
 precision mediump float;
 
@@ -77,28 +79,6 @@ float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
 
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  float a = hash(i);
-  float b = hash(i + vec2(1.0, 0.0));
-  float c = hash(i + vec2(0.0, 1.0));
-  float d = hash(i + vec2(1.0, 1.0));
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-}
-
-float fbm(vec2 p) {
-  float value = 0.0;
-  float amp = 0.55;
-  for (int i = 0; i < 4; i++) {
-    value += amp * noise(p);
-    p *= 2.02;
-    amp *= 0.5;
-  }
-  return value;
-}
-
 vec3 pulseColor(float t) {
   if (t < 0.5) return vec3(0.8, 0.45, 0.95);
   if (t < 1.5) return vec3(0.3, 0.7, 1.0);
@@ -116,34 +96,27 @@ void main() {
   float time = u_time * u_speed;
   float activity = clamp(u_activity, 0.0, 1.0);
 
-  float drift = fbm(pos * 1.2 + vec2(time * 0.15, time * 0.08));
-  float curl = fbm(pos * 2.1 - vec2(time * 0.12, time * 0.2));
-  vec2 flow = vec2(drift - 0.5, curl - 0.5) * (0.18 + u_layer * 0.08) * activity;
-  pos += flow;
+  float center = 0.05 * sin(pos.x * 1.6 + time * 0.12 + u_layer);
 
-  float center = 0.15 * sin(pos.x * 3.0 + time * 0.7 + u_layer) +
-                 0.08 * sin(pos.x * 6.0 - time * 0.3) +
-                 (fbm(pos * 1.5 + time * 0.12) - 0.5) * 0.22;
-
-  float thickness = 0.2 + 0.05 * fbm(pos * 2.4 + u_layer) + 0.06 * u_layer;
+  float thickness = 0.15 + 0.03 * u_layer;
   float dist = abs(pos.y - center);
   float body = smoothstep(thickness, thickness * 0.6, dist);
 
   float edge = smoothstep(thickness * 0.75, thickness * 0.2, dist);
-  float shimmer = pow(edge, 2.0) * (0.55 + 0.45 * sin(time * 2.4 + pos.x * 10.0));
+  float shimmer = pow(edge, 2.0) * 0.15;
 
   float breathing = 0.6 + 0.4 * sin(u_time * 0.25 + u_layer * 1.7);
 
-  vec3 base = mix(u_colorA, u_colorB, 0.5 + 0.5 * sin(pos.x * 1.8 + time * 0.4));
-  base = mix(base, u_colorC, 0.5 + 0.5 * fbm(pos * 1.8 - time * 0.2));
+  vec3 base = mix(u_colorA, u_colorB, 0.5 + 0.5 * sin(pos.x * 1.2 + time * 0.12));
+  base = mix(base, u_colorC, 0.4);
 
   float glow = pow(body, 1.25) * (0.7 + 0.9 * shimmer);
-  vec3 color = base * (0.55 + 0.65 * breathing) * body;
-  color += base * glow * (1.6 + u_depth * 0.7);
+  vec3 color = base * (0.22 + 0.38 * breathing) * body;
+  color += base * glow * (0.32 + u_depth * 0.2);
 
   float rays = pow(max(0.0, 1.0 - abs(pos.x) * 1.8), 2.0);
-  rays *= (0.3 + 0.7 * fbm(vec2(pos.x * 2.0, time * 0.2 + u_layer))) * activity;
-  color += u_colorB * rays * 0.3;
+  rays *= 0.2 * activity;
+  color += u_colorB * rays * 0.08;
 
   vec3 pulse = vec3(0.0);
   for (int i = 0; i < 8; i++) {
@@ -156,12 +129,11 @@ void main() {
     pulse += pulseColor(data.y) * band * data.z * exp(-age * 0.35) * alive;
   }
 
-  color += pulse * 0.8;
+  color += pulse * 0.2;
 
-  float storm = smoothstep(0.55, 0.9, fbm(pos * 3.0 + vec2(0.0, time * 0.15)));
-  color += vec3(0.3, 0.45, 0.8) * storm * 0.15 * (1.0 - activity);
+  float storm = 0.0;
 
-  float alpha = smoothstep(0.0, 0.85, body + glow) * (0.75 + 0.25 * activity);
+  float alpha = smoothstep(0.0, 0.85, body + glow) * (0.14 + 0.1 * activity);
   color *= u_exposure;
   gl_FragColor = vec4(color, alpha);
 }
@@ -236,7 +208,9 @@ export default function RiverSketch() {
         p.setup = () => {
           p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
           p.noStroke();
-          shader = p.createShader(VERTEX_SHADER, FRAGMENT_SHADER);
+          if (SHOW_RIVER) {
+            shader = p.createShader(VERTEX_SHADER, FRAGMENT_SHADER);
+          }
           initParticles();
         };
 
@@ -253,6 +227,14 @@ export default function RiverSketch() {
 
           pulses = pulses.filter((pulse) => now / 1000 - pulse.time < 10);
           symbols = symbols.filter((symbol) => now / 1000 - symbol.born < 20);
+          (window as Window & { riverCounts?: Record<string, number> }).riverCounts = {
+            dns: symbols.filter((symbol) => symbol.type === EVENT_TYPES.dns).length,
+            tcp: symbols.filter((symbol) => symbol.type === EVENT_TYPES.tcp).length,
+            udp: symbols.filter((symbol) => symbol.type === EVENT_TYPES.udp).length,
+            portscan: symbols.filter((symbol) => symbol.type === EVENT_TYPES.portscan).length,
+            malformed: symbols.filter((symbol) => symbol.type === EVENT_TYPES.malformed).length,
+            hierarchy: symbols.filter((symbol) => symbol.type === EVENT_TYPES.hierarchy).length,
+          };
           if (now > nextRippleAt) {
             addPulse({ type: "udp", strength: 0.6 });
             nextRippleAt = now + p.random(60000, 90000);
@@ -260,50 +242,52 @@ export default function RiverSketch() {
 
           p.clear();
           p.background(1, 2, 6);
-          p.shader(shader);
-          p.blendMode(p.BLEND);
+          if (SHOW_RIVER) {
+            p.shader(shader);
+            p.blendMode(p.BLEND);
 
-          const layerColors = [
-            [0.18, 0.32, 0.58],
-            [0.22, 0.42, 0.62],
-            [0.36, 0.28, 0.62],
-            [0.62, 0.42, 0.92],
-          ];
+            const layerColors = [
+              [0.08, 0.16, 0.26],
+              [0.1, 0.18, 0.3],
+              [0.12, 0.2, 0.32],
+              [0.14, 0.22, 0.34],
+            ];
 
-          for (let i = 0; i < 4; i += 1) {
-            const depth = i / 4;
-            const colorA = layerColors[i];
-            const colorB = layerColors[(i + 1) % layerColors.length];
-            const colorC = layerColors[(i + 2) % layerColors.length];
+            for (let i = 0; i < 4; i += 1) {
+              const depth = i / 4;
+              const colorA = layerColors[i];
+              const colorB = layerColors[(i + 1) % layerColors.length];
+              const colorC = layerColors[(i + 2) % layerColors.length];
 
-            shader.setUniform("u_resolution", [p.width, p.height]);
-            shader.setUniform("u_time", now / 1000);
-            shader.setUniform("u_activity", activity);
-            shader.setUniform("u_layer", i * 0.7 + 0.2);
-            shader.setUniform("u_depth", depth);
-            shader.setUniform("u_speed", 0.25 + i * 0.08);
-            shader.setUniform("u_colorA", colorA);
-            shader.setUniform("u_colorB", colorB);
-            shader.setUniform("u_colorC", colorC);
-            shader.setUniform("u_exposure", 1.55);
-            shader.setUniform("u_pulseCount", pulses.length);
-            shader.setUniform(
-              "u_pulses",
-              pulses.flatMap((pulse) => [pulse.time, pulse.type, pulse.strength, pulse.seed])
-            );
+              shader.setUniform("u_resolution", [p.width, p.height]);
+              shader.setUniform("u_time", now / 1000);
+              shader.setUniform("u_activity", activity);
+              shader.setUniform("u_layer", i * 0.7 + 0.2);
+              shader.setUniform("u_depth", depth);
+              shader.setUniform("u_speed", 0.25 + i * 0.08);
+              shader.setUniform("u_colorA", colorA);
+              shader.setUniform("u_colorB", colorB);
+              shader.setUniform("u_colorC", colorC);
+              shader.setUniform("u_exposure", 0.25);
+              shader.setUniform("u_pulseCount", pulses.length);
+              shader.setUniform(
+                "u_pulses",
+                pulses.flatMap((pulse) => [pulse.time, pulse.type, pulse.strength, pulse.seed])
+              );
 
-            p.blendMode(i === 0 ? p.BLEND : p.ADD);
-            p.rect(-p.width / 2, -p.height / 2, p.width, p.height);
+              p.blendMode(p.BLEND);
+              p.rect(-p.width / 2, -p.height / 2, p.width, p.height);
+            }
+
+            p.resetShader();
+            // Reinforce bloom / god rays (soft, not a hard band)
+            p.blendMode(p.ADD);
+            p.noStroke();
+            p.fill(80, 140, 255, 7);
+            p.ellipse(0, 0, p.width * 1.1, p.height * 0.55);
+            p.fill(140, 90, 255, 4);
+            p.ellipse(0, -p.height * 0.1, p.width * 0.8, p.height * 0.35);
           }
-
-          p.resetShader();
-          // Reinforce bloom / god rays (soft, not a hard band)
-          p.blendMode(p.ADD);
-          p.noStroke();
-          p.fill(80, 140, 255, 7);
-          p.ellipse(0, 0, p.width * 1.1, p.height * 0.55);
-          p.fill(140, 90, 255, 4);
-          p.ellipse(0, -p.height * 0.1, p.width * 0.8, p.height * 0.35);
           p.blendMode(p.ADD);
           p.stroke(160, 220, 255, 80);
           p.strokeWeight(2);
