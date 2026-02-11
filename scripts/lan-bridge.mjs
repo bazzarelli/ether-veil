@@ -67,6 +67,16 @@ if (listOnly) {
     }
   };
 
+  const rateMs = Number(process.env.RIVER_RATE_MS ?? 80);
+  const lastSentByType = new Map();
+  const shouldSend = (type) => {
+    const now = Date.now();
+    const last = lastSentByType.get(type) ?? 0;
+    if (now - last < rateMs) return false;
+    lastSentByType.set(type, now);
+    return true;
+  };
+
   const tsharkArgs = [
     "-l",
     "-n",
@@ -166,7 +176,9 @@ if (listOnly) {
           strength = Math.max(strength, 1.2);
         }
 
-        sendEvent({ type, strength, protocol: protoCol, src });
+        if (shouldSend(type)) {
+          sendEvent({ type, strength, protocol: protoCol, src });
+        }
       } catch (err) {
         // Ignore parse errors from partial JSON lines.
       }

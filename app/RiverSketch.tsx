@@ -18,6 +18,7 @@ type SymbolEvent = {
   y: number;
   spin: number;
   size: number;
+  drift: number;
 };
 
 type RiverEventInput =
@@ -68,6 +69,7 @@ uniform float u_speed;
 uniform vec3 u_colorA;
 uniform vec3 u_colorB;
 uniform vec3 u_colorC;
+uniform float u_exposure;
 uniform float u_pulseCount;
 uniform vec4 u_pulses[8];
 
@@ -123,7 +125,7 @@ void main() {
                  0.08 * sin(pos.x * 6.0 - time * 0.3) +
                  (fbm(pos * 1.5 + time * 0.12) - 0.5) * 0.22;
 
-  float thickness = 0.16 + 0.04 * fbm(pos * 2.4 + u_layer) + 0.05 * u_layer;
+  float thickness = 0.2 + 0.05 * fbm(pos * 2.4 + u_layer) + 0.06 * u_layer;
   float dist = abs(pos.y - center);
   float body = smoothstep(thickness, thickness * 0.6, dist);
 
@@ -135,9 +137,9 @@ void main() {
   vec3 base = mix(u_colorA, u_colorB, 0.5 + 0.5 * sin(pos.x * 1.8 + time * 0.4));
   base = mix(base, u_colorC, 0.5 + 0.5 * fbm(pos * 1.8 - time * 0.2));
 
-  float glow = pow(body, 1.4) * (0.5 + 0.8 * shimmer);
-  vec3 color = base * (0.45 + 0.55 * breathing) * body;
-  color += base * glow * (1.2 + u_depth * 0.5);
+  float glow = pow(body, 1.25) * (0.7 + 0.9 * shimmer);
+  vec3 color = base * (0.55 + 0.65 * breathing) * body;
+  color += base * glow * (1.6 + u_depth * 0.7);
 
   float rays = pow(max(0.0, 1.0 - abs(pos.x) * 1.8), 2.0);
   rays *= (0.3 + 0.7 * fbm(vec2(pos.x * 2.0, time * 0.2 + u_layer))) * activity;
@@ -154,12 +156,13 @@ void main() {
     pulse += pulseColor(data.y) * band * data.z * exp(-age * 0.35) * alive;
   }
 
-  color += pulse * 0.7;
+  color += pulse * 0.8;
 
   float storm = smoothstep(0.55, 0.9, fbm(pos * 3.0 + vec2(0.0, time * 0.15)));
   color += vec3(0.3, 0.45, 0.8) * storm * 0.15 * (1.0 - activity);
 
-  float alpha = smoothstep(0.0, 0.9, body + glow) * (0.4 + 0.6 * activity);
+  float alpha = smoothstep(0.0, 0.85, body + glow) * (0.75 + 0.25 * activity);
+  color *= u_exposure;
   gl_FragColor = vec4(color, alpha);
 }
 `;
@@ -204,7 +207,8 @@ export default function RiverSketch() {
           x: (Math.random() - 0.5) * 0.9,
           y: (Math.random() - 0.5) * 0.45,
           spin: (Math.random() - 0.5) * 0.8,
-          size: 20 + Math.random() * 30,
+          size: 10 + Math.random() * 16,
+          drift: 0.012 + Math.random() * 0.02,
         });
         symbols = symbols.slice(0, 24);
         lastActivity = now;
@@ -244,10 +248,11 @@ export default function RiverSketch() {
         p.draw = () => {
           const now = performance.now();
           const idleSeconds = (now - lastActivity) / 1000;
-          const activity = idleSeconds < 10 ? 1 : Math.max(0, 1 - (idleSeconds - 10) / 8);
+          const activity =
+            idleSeconds < 10 ? 1 : Math.max(0.5, 1 - (idleSeconds - 10) / 8);
 
           pulses = pulses.filter((pulse) => now / 1000 - pulse.time < 10);
-          symbols = symbols.filter((symbol) => now / 1000 - symbol.born < 10);
+          symbols = symbols.filter((symbol) => now / 1000 - symbol.born < 20);
           if (now > nextRippleAt) {
             addPulse({ type: "udp", strength: 0.6 });
             nextRippleAt = now + p.random(60000, 90000);
@@ -259,10 +264,10 @@ export default function RiverSketch() {
           p.blendMode(p.BLEND);
 
           const layerColors = [
-            [0.12, 0.22, 0.4],
-            [0.16, 0.34, 0.5],
-            [0.28, 0.22, 0.52],
-            [0.52, 0.36, 0.82],
+            [0.18, 0.32, 0.58],
+            [0.22, 0.42, 0.62],
+            [0.36, 0.28, 0.62],
+            [0.62, 0.42, 0.92],
           ];
 
           for (let i = 0; i < 4; i += 1) {
@@ -280,6 +285,7 @@ export default function RiverSketch() {
             shader.setUniform("u_colorA", colorA);
             shader.setUniform("u_colorB", colorB);
             shader.setUniform("u_colorC", colorC);
+            shader.setUniform("u_exposure", 1.55);
             shader.setUniform("u_pulseCount", pulses.length);
             shader.setUniform(
               "u_pulses",
@@ -294,9 +300,9 @@ export default function RiverSketch() {
           // Reinforce bloom / god rays (soft, not a hard band)
           p.blendMode(p.ADD);
           p.noStroke();
-          p.fill(80, 140, 255, 12);
+          p.fill(80, 140, 255, 7);
           p.ellipse(0, 0, p.width * 1.1, p.height * 0.55);
-          p.fill(140, 90, 255, 8);
+          p.fill(140, 90, 255, 4);
           p.ellipse(0, -p.height * 0.1, p.width * 0.8, p.height * 0.35);
           p.blendMode(p.ADD);
           p.stroke(160, 220, 255, 80);
@@ -327,11 +333,21 @@ export default function RiverSketch() {
           p.noFill();
           symbols.forEach((symbol) => {
             const age = now / 1000 - symbol.born;
-            const fadeIn = p.constrain(age / 1.2, 0, 1);
-            const fadeOut = p.constrain(1 - age / 10, 0, 1);
+            const fadeIn = p.constrain(age / 2.4, 0, 1);
+            const fadeOut = p.constrain(1 - age / 20, 0, 1);
             const fade = Math.pow(fadeIn * fadeOut, 1.1);
             const pulse = 1 + 0.15 * Math.sin(age * 3 + symbol.type);
             const size = symbol.size * pulse * (0.7 + symbol.strength * 0.3);
+            const flow = p.noise(symbol.y * 2 + age * 0.4, symbol.type * 0.7);
+            const drift = symbol.drift * (0.4 + flow);
+            symbol.x += drift * 0.0015;
+            symbol.y += Math.sin(age * 0.6 + symbol.spin) * 0.0004;
+
+            if (symbol.x > 0.62) {
+              symbol.x = -0.62;
+              symbol.y = (Math.random() - 0.5) * 0.45;
+            }
+
             const x = symbol.x * p.width;
             const y = symbol.y * p.height;
 
@@ -341,8 +357,9 @@ export default function RiverSketch() {
 
             switch (symbol.type) {
               case EVENT_TYPES.dns: {
-                // Inverted pink triangle
-                p.stroke(255, 120, 200, 120 * fade);
+                // Inverted pink triangle (solid)
+                p.noStroke();
+                p.fill(255, 120, 200, 120 * fade);
                 p.beginShape();
                 p.vertex(0, size * 0.6);
                 p.vertex(-size * 0.6, -size * 0.4);
@@ -351,10 +368,10 @@ export default function RiverSketch() {
                 break;
               }
               case EVENT_TYPES.tcp: {
-                // Cyan square (stable flow)
-                p.stroke(120, 220, 255, 110 * fade);
-                p.rectMode(p.CENTER);
-                p.rect(0, 0, size, size);
+                // Solid cyan circle (stable flow)
+                p.noStroke();
+                p.fill(120, 220, 255, 130 * fade);
+                p.ellipse(0, 0, size * 1.05, size * 1.05);
                 break;
               }
               case EVENT_TYPES.udp: {
