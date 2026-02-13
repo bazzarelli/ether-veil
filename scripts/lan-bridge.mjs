@@ -151,11 +151,16 @@ if (listOnly) {
         const protoCol = getLayer(["_ws.col.Protocol", "_ws_col_Protocol"]) ?? "";
         const src = getLayer(["ip.src", "ip_src"]);
         const frameLen = Number(getLayer(["frame.len", "frame_len"]) ?? 0);
-        const tcpFlagsSyn = getLayer(["tcp.flags.syn", "tcp_flags_syn"]) === "1";
-        const tcpFlagsAck = getLayer(["tcp.flags.ack", "tcp_flags_ack"]) === "1";
+        const tcpFlagsSyn = getLayer(["tcp.flags.syn", "tcp_flags_syn"]) === "True";
+        const tcpFlagsAck = getLayer(["tcp.flags.ack", "tcp_flags_ack"]) === "True";
         const dnsQuery = getLayer(["dns.qry.name", "dns_qry_name"]);
         const udpPort = getLayer(["udp.port", "udp_port"]);
         const tcpPort = getLayer(["tcp.port", "tcp_port"]);
+
+        // Debug: Only log SYN packets (less verbose)
+        if (tcpPort && tcpFlagsSyn && !tcpFlagsAck) {
+          console.log(`[TCP-SYN] ${src} → port ${tcpPort}`);
+        }
 
         pruneSyn();
 
@@ -184,9 +189,11 @@ if (listOnly) {
         if (src && tcpFlagsSyn && !tcpFlagsAck && tcpPort) {
           recordSyn(src, tcpPort);
           const bucket = synTracker.get(src);
+          console.log(`[SYN] ${src}:${tcpPort} -> ${bucket.ports.size} unique ports tracked`);
           if (bucket && bucket.ports.size >= 8) {
             type = "portscan";
             strength = 1.8;
+            console.log(`🚨 PORT SCAN DETECTED from ${src} (${bucket.ports.size} ports)`);
           }
         }
 

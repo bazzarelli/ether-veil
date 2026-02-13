@@ -9,7 +9,8 @@
     "lint": "eslint",
     "river:bridge": "node scripts/lan-bridge.mjs",
     "river:interfaces": "node scripts/lan-bridge.mjs --list",
-    "river:test": "node scripts/test-tcp-vapor.mjs"
+    "river:test": "node scripts/test-tcp-vapor.mjs",
+    "river:test-portscan": "sudo python3 scripts/simulate-portscan.py 127.0.0.1 12"
   },
   "dependencies": {
     "next": "16.1.6",

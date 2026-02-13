@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Port Scan Visualization Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #111;
+            color: #0f0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #333;
+            color: #0f0;
+            border: 1px solid #0f0;
+        }
+        button:hover {
+            background: #0f0;
+            color: #000;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #0f0;
+            background: #222;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Port Scan Visualization Test</h1>
+    <p>This page tests if the visualization can display red diamonds.</p>
+    <p>Open your visualization at <a href="http://localhost:3000" target="_blank" style="color: cyan;">http://localhost:3000</a></p>
+
+    <h2>Manual Event Injection (Browser Console)</h2>
+    <button onclick="testConsole()">Test in Console</button>
+    <p>Or open the browser console on localhost:3000 and run:</p>
+    <pre style="background: #000; padding: 10px;">window.pushRiverEvent({ type: 'portscan', strength: 1.8 })</pre>
+
+    <h2>WebSocket Event Injection</h2>
+    <button onclick="connect()">Connect to Bridge</button>
+    <button onclick="sendPortscan()">Send Port Scan Event</button>
+    <button onclick="sendMultiple()">Send 5 Port Scans</button>
+    <button onclick="disconnect()">Disconnect</button>
+
+    <div id="status">Status: Not connected</div>
+
+    <script>
+        let ws = null;
+        const status = document.getElementById('status');
+
+        function updateStatus(msg, color = '#0f0') {
+            status.innerHTML = msg;
+            status.style.borderColor = color;
+        }
+
+        function testConsole() {
+            alert('Switch to localhost:3000, open the browser console (F12), and paste:\n\nwindow.pushRiverEvent({ type: \'portscan\', strength: 1.8 })\n\nYou should see a red diamond appear!');
+        }
+
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                updateStatus('Already connected', 'yellow');
+                return;
+            }
+
+            updateStatus('Connecting to ws://localhost:8787...', 'yellow');
+            ws = new WebSocket('ws://localhost:8787');
+
+            ws.onopen = () => {
+                updateStatus('✅ Connected to bridge at ws://localhost:8787', '#0f0');
+            };
+
+            ws.onerror = (err) => {
+                updateStatus('❌ Connection error. Is the bridge running? (npm run river:bridge -- --iface en1)', 'red');
+                console.error(err);
+            };
+
+            ws.onclose = () => {
+                updateStatus('Disconnected', 'gray');
+            };
+        }
+
+        function sendPortscan() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                updateStatus('❌ Not connected. Click "Connect to Bridge" first.', 'red');
+                return;
+            }
+
+            const event = {
+                type: 'portscan',
+                strength: 1.8,
+                src: '192.168.1.100',
+                protocol: 'TCP'
+            };
+
+            ws.send(JSON.stringify(event));
+            updateStatus('✅ Sent portscan event. Check localhost:3000 for red diamond!', 'cyan');
+        }
+
+        function sendMultiple() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                updateStatus('❌ Not connected. Click "Connect to Bridge" first.', 'red');
+                return;
+            }
+
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const event = {
+                        type: 'portscan',
+                        strength: 1.5 + Math.random() * 0.5,
+                        src: `192.168.1.${100 + i}`,
+                        protocol: 'TCP'
+                    };
+                    ws.send(JSON.stringify(event));
+                }, i * 300);
+            }
+
+            updateStatus('✅ Sent 5 portscan events over 1.5s. Check localhost:3000!', 'cyan');
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                updateStatus('Disconnected', 'gray');
+            }
+        }
+    </script>
+</body>
+</html>

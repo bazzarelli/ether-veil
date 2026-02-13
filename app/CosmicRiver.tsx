@@ -39,6 +39,27 @@ const EVENT_TYPES: Record<string, number> = {
   hierarchy: 5,
 };
 
+// ─── Visual customization ───────────────────────────────────────────────────
+// Tweak these to change the appearance without touching the core logic
+/*
+// Original cyan/teal palette:
+const CORE_STREAK_COLOR = { r: 100, g: 100, b: 255 }; // Brighter blue for center line
+const VAPOR_COLORS = {
+  base: { r: 10, g: 180, b: 185 }, // Deep teal base
+  mid: { r: 30, g: 220, b: 200 }, // Seafoam mid-tone
+  bloom: { r: 120, g: 255, b: 240 }, // Electric cyan bloom
+};
+*/
+// Adjusted colors for a more moody violet/crimson spectrum
+const CORE_STREAK_COLOR = { r: 100, g: 100, b: 255 };
+// Deep violet core (strong blue + red, minimal green)
+
+const VAPOR_COLORS = {
+  base: { r: 60, g: 10, b: 110 }, // Dark indigo base
+  mid: { r: 110, g: 20, b: 160 }, // Rich purple mid-tone
+  bloom: { r: 200, g: 40, b: 120 }, // Magenta-red bloom
+};
+
 // ─── TCP throughput tracker ────────────────────────────────────────────────────
 // Maintains a 3-second rolling window of byte counts and converts to a
 // normalised 0-1 intensity value.
@@ -320,13 +341,13 @@ export default function CosmicRiver() {
                 break;
               }
               case EVENT_TYPES.portscan: {
-                p.stroke(255, 90, 80, 140 * fade);
-                p.beginShape();
-                p.vertex(0, -size * 0.7);
-                p.vertex(size * 0.7, 0);
-                p.vertex(0, size * 0.7);
-                p.vertex(-size * 0.7, 0);
-                p.endShape(p.CLOSE);
+                // Bright red bold X
+                p.stroke(255, 40, 40, 200 * fade);
+                p.strokeWeight(4);
+                // Draw X as two diagonal lines
+                p.line(-size * 0.7, -size * 0.7, size * 0.7, size * 0.7);
+                p.line(size * 0.7, -size * 0.7, -size * 0.7, size * 0.7);
+                p.strokeWeight(2); // Reset stroke weight
                 break;
               }
               case EVENT_TYPES.malformed: {
@@ -514,9 +535,12 @@ export default function CosmicRiver() {
             (0.06 + noise1(bi * 1.3 + t * 0.2) * 0.07);
 
           // Marine colour: deep teal → aqua → seafoam → electric cyan at high intensity
-          const hue1 = `rgba(10,  180, 185, ${alpha})`; // mid aqua
-          const hue2 = `rgba(30,  220, 200, ${alpha * 0.6})`; // seafoam
-          const hue3 = `rgba(120, 255, 240, ${alpha * (0.3 + intensity * 0.5)})`; // bloom
+          const { r: r1, g: g1, b: b1 } = VAPOR_COLORS.base;
+          const { r: r2, g: g2, b: b2 } = VAPOR_COLORS.mid;
+          const { r: r3, g: g3, b: b3 } = VAPOR_COLORS.bloom;
+          const hue1 = `rgba(${r1}, ${g1}, ${b1}, ${alpha})`;
+          const hue2 = `rgba(${r2}, ${g2}, ${b2}, ${alpha * 0.6})`;
+          const hue3 = `rgba(${r3}, ${g3}, ${b3}, ${alpha * (0.3 + intensity * 0.5)})`;
 
           const grad = ctx.createRadialGradient(bx, by, 0, bx, by, brad);
           grad.addColorStop(0, hue3);
@@ -536,9 +560,10 @@ export default function CosmicRiver() {
       if (intensity > 0.3) {
         const coreAlpha = ((intensity - 0.3) / 0.7) * 0.18;
         const coreGrad = ctx.createLinearGradient(0, cy - 4, 0, cy + 4);
-        coreGrad.addColorStop(0, `rgba(180,255,245,0)`);
-        coreGrad.addColorStop(0.5, `rgba(180,255,245,${coreAlpha})`);
-        coreGrad.addColorStop(1, `rgba(180,255,245,0)`);
+        const { r, g, b } = CORE_STREAK_COLOR;
+        coreGrad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+        coreGrad.addColorStop(0.5, `rgba(${r},${g},${b},${coreAlpha})`);
+        coreGrad.addColorStop(1, `rgba(${r},${g},${b},0)`);
         ctx.globalCompositeOperation = "lighter";
         ctx.fillStyle = coreGrad;
         ctx.fillRect(0, cy - 4, w, 8);

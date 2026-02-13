@@ -77,7 +77,8 @@ export default function EventLegend() {
       <li className="flex items-center gap-3">
         <span className="inline-flex h-3 w-3 items-center justify-center">
           <svg viewBox="0 0 20 20" className="h-3 w-3">
-            <polygon points="10,1 19,10 10,19 1,10" fill="none" stroke="rgb(255,90,80)" strokeWidth="2" />
+            <line x1="4" y1="4" x2="16" y2="16" stroke="rgb(255,40,40)" strokeWidth="3" strokeLinecap="round" />
+            <line x1="16" y1="4" x2="4" y2="16" stroke="rgb(255,40,40)" strokeWidth="3" strokeLinecap="round" />
           </svg>
         </span>
         <span>Port scan</span>
