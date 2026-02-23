@@ -1,5 +1,6 @@
 import EventLegend from "./EventLegend";
 import CosmicRiver from "./CosmicRiver";
+import FullscreenButton from "./FullscreenButton";
 
 export default function Home() {
   return (
@@ -9,6 +10,10 @@ export default function Home() {
       </div>
 
       <div className="relative z-10 flex min-h-screen flex-col justify-between px-8 py-10 text-slate-100">
+        <div className="absolute right-8 top-10 z-20">
+          <FullscreenButton />
+        </div>
+
         <header className="flex max-w-4xl flex-col gap-4">
           <p className="text-sm uppercase tracking-[0.35em] text-cyan-200/70">
             Network Activity
