@@ -15,8 +15,8 @@ const bodyFont = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Shark Cosmic River",
-  description: "Abstract network flow visualization in p5.js + WebGL.",
+  title: "Ether Veil",
+  description: "Abstract network flow visualization",
 };
 
 export default function RootLayout({
