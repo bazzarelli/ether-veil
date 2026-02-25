@@ -27,7 +27,10 @@ export default function Home() {
         </section>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(14,70,100,0.35),transparent_55%),radial-gradient(circle_at_30%_80%,rgba(60,20,90,0.35),transparent_50%)]" />
+      <div className="pointer-events-none absolute inset-0">
+        <div className="planet-orb planet-orb-top" />
+        <div className="planet-orb planet-orb-bottom" />
+      </div>
     </div>
   );
 }
