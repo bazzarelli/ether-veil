@@ -300,7 +300,26 @@ export default function CosmicRiver() {
             const fadeOut = p.constrain(1 - age / 20, 0, 1);
             const fade = Math.pow(fadeIn * fadeOut, 1.1);
             const pulse = 1 + 0.15 * Math.sin(age * 3 + symbol.type);
-            const size = symbol.size * pulse * (0.7 + symbol.strength * 0.3);
+            const isAlertSymbol =
+              symbol.type === EVENT_TYPES.portscan ||
+              symbol.type === EVENT_TYPES.malformed;
+            // Alert symbols (portscan/malformed) get a fast "arrival pulse"
+            // that decays over the first seconds.
+            const alertEnvelope = isAlertSymbol ? Math.exp(-age * 2.6) : 0;
+            const alertPulse =
+              isAlertSymbol
+                ? 1 + (0.35 + 0.65 * Math.abs(Math.sin(age * 14))) * alertEnvelope
+                : 1;
+            const alertFadeBoost =
+              isAlertSymbol
+                ? p.constrain(
+                    fade * (1 + 0.7 * alertEnvelope + 0.5 * Math.abs(Math.sin(age * 16))),
+                    0,
+                    1,
+                  )
+                : fade;
+            const size =
+              symbol.size * pulse * alertPulse * (0.7 + symbol.strength * 0.3);
             const flow = p.noise(symbol.y * 2 + age * 0.4, symbol.type * 0.7);
             const drift = symbol.drift * (0.4 + flow);
             symbol.x += drift * 0.0015;
@@ -320,6 +339,7 @@ export default function CosmicRiver() {
 
             switch (symbol.type) {
               case EVENT_TYPES.dns: {
+                // Pink filled triangle pointing up
                 p.noStroke();
                 p.fill(255, 120, 200, 120 * fade);
                 p.beginShape();
@@ -330,20 +350,22 @@ export default function CosmicRiver() {
                 break;
               }
               case EVENT_TYPES.tcp: {
+                // Cyan filled circle with soft glow
                 p.noStroke();
                 p.fill(120, 220, 255, 130 * fade);
                 p.ellipse(0, 0, size * 1.05, size * 1.05);
                 break;
               }
               case EVENT_TYPES.udp: {
+                // Lighter cyan hollow circle
                 p.stroke(120, 180, 255, 100 * fade);
                 p.ellipse(0, 0, size * 1.1, size * 1.1);
                 break;
               }
               case EVENT_TYPES.portscan: {
                 // Bright red bold X
-                p.stroke(255, 40, 40, 200 * fade);
-                p.strokeWeight(4);
+                p.stroke(255, 40, 40, 220 * alertFadeBoost);
+                p.strokeWeight(3.5 + 2 * alertEnvelope);
                 // Draw X as two diagonal lines
                 p.line(-size * 0.7, -size * 0.7, size * 0.7, size * 0.7);
                 p.line(size * 0.7, -size * 0.7, -size * 0.7, size * 0.7);
@@ -351,7 +373,9 @@ export default function CosmicRiver() {
                 break;
               }
               case EVENT_TYPES.malformed: {
-                p.stroke(255, 190, 100, 140 * fade);
+                // Solid yellow spiky star
+                p.noStroke();
+                p.fill(255, 220, 90, 210 * alertFadeBoost);
                 p.beginShape();
                 for (let i = 0; i < 8; i += 1) {
                   const angle = (p.TWO_PI / 8) * i;
@@ -359,9 +383,11 @@ export default function CosmicRiver() {
                   p.vertex(Math.cos(angle) * radius, Math.sin(angle) * radius);
                 }
                 p.endShape(p.CLOSE);
+                p.strokeWeight(2);
                 break;
               }
               case EVENT_TYPES.hierarchy: {
+                // Violet triangle pointing down
                 p.stroke(190, 140, 255, 120 * fade);
                 p.beginShape();
                 p.vertex(-size * 0.7, -size * 0.3);

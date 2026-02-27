@@ -1,73 +1,54 @@
-## Getting Started (macOS, from scratch)
+# Shark Cosmic River
 
-### 1) Install system prerequisites
+Real-time, art-forward network activity visualization built with Next.js and p5.js.
 
-Install Xcode Command Line Tools:
+The app renders ambient particles, protocol symbols (TCP/UDP/DNS/Portscan/Malformed/Hierarchy), and a TCP-intensity vapor field from live packet events.
 
-```bash
-xcode-select --install
-```
+## Open Source Status
 
-Install Homebrew (if needed): [brew.sh](https://brew.sh)
+This repository is intended for classroom and community use.
 
-Install `nvm` and Node.js 20 LTS:
+- License: MIT ([LICENSE](./LICENSE))
+- Contributions: see [CONTRIBUTING.md](./CONTRIBUTING.md)
 
-```bash
-brew install nvm
-mkdir -p ~/.nvm
-export NVM_DIR="$HOME/.nvm"
-[ -s "$(brew --prefix nvm)/nvm.sh" ] && . "$(brew --prefix nvm)/nvm.sh"
-nvm install 20
-nvm use 20
-```
+## Requirements
 
-Verify:
+- Node.js 20+
+- npm 10+
+- Git
+- Wireshark/tshark
 
-```bash
-node -v
-npm -v
-```
+## Quick Start
 
-### 2) Clone and install project dependencies
+Clone and install:
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/<your-org-or-user>/shark-cosmic-river.git
 cd shark-cosmic-river
-npm install
 ```
 
-### 3) Install Wireshark / tshark
-
-Install Wireshark from [wireshark.org](https://www.wireshark.org/download.html) and ensure `tshark` is available.
-
-This project defaults to:
-
-`/Applications/Wireshark.app/Contents/MacOS/tshark`
-
-If your `tshark` is elsewhere, set:
+### macOS / Linux
 
 ```bash
-export TSHARK_PATH="/path/to/tshark"
+./scripts/bootstrap.sh
 ```
 
-### 4) Ensure capture permissions on macOS
+### Windows (PowerShell)
 
-Packet capture may fail without BPF permissions. In Wireshark installation, enable non-root packet capture support (ChmodBPF) when prompted.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
+```
 
-If you skipped it and see permission errors, reinstall/repair Wireshark capture permissions, or run the bridge with `sudo` as a fallback.
+Then run in two terminals:
 
-### 5) Start the app
-
-Terminal 1: list interfaces and start the packet bridge.
+Terminal 1 (bridge):
 
 ```bash
 npm run river:interfaces
-npm run river:bridge -- --iface en0
+npm run river:bridge -- --iface <your-interface>
 ```
 
-Use the interface that matches your connection (`en0`, `en1`, etc.).
-
-Terminal 2: start the Next.js app.
+Terminal 2 (frontend):
 
 ```bash
 npm run dev
@@ -75,76 +56,69 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-The frontend connects to `ws://localhost:8787` by default.
+## LAN Classroom Setup
 
-### Optional environment overrides
+If students should view the same visualization from your machine:
+
+1. Start Next on all interfaces:
 
 ```bash
-export RIVER_WS_PORT=8787
-export NEXT_PUBLIC_RIVER_WS_URL="ws://localhost:8787"
-export RIVER_RATE_MS=80
-export RIVER_TCP_FLUSH_MS=200
+npm run dev -- -H 0.0.0.0
 ```
+
+2. Point frontend WebSocket to your host IP (example `192.168.1.25`):
+
+```bash
+export NEXT_PUBLIC_RIVER_WS_URL="ws://192.168.1.25:8787"
+```
+
+3. Ensure firewall allows inbound traffic on ports `3000` and `8787`.
+
+4. Students open:
+
+```text
+http://192.168.1.25:3000
+```
+
+Note: They will see events captured from the interface running on your host. On switched networks this is usually host-local traffic unless you have mirrored/SPAN visibility.
+
+## Environment Variables
+
+- `NEXT_PUBLIC_RIVER_WS_URL` (default `ws://localhost:8787`)
+- `RIVER_WS_PORT` (default `8787`)
+- `RIVER_RATE_MS` (event throttle)
+- `RIVER_TCP_FLUSH_MS` (TCP byte flush interval)
+- `TSHARK_PATH` (custom path to tshark binary)
 
 ## Troubleshooting
 
-### No packets showing in the visualization
+### tshark not found
 
-1. Confirm the bridge is running and prints:
-`River bridge listening on ws://localhost:8787`
-2. Confirm your interface is active:
+- Install Wireshark/tshark.
+- If installed in a non-standard path, set `TSHARK_PATH`.
 
-```bash
-npm run river:interfaces
-```
+### Permission denied when capturing
 
-3. Try a different interface (`en0`, `en1`, etc.):
+- macOS: enable non-root capture support during Wireshark install (ChmodBPF).
+- Linux: add user to capture group / configure dumpcap capabilities.
+- Fallback: run bridge with elevated privileges if policy allows.
 
-```bash
-npm run river:bridge -- --iface en1
-```
+### Frontend cannot connect to WebSocket
 
-4. Generate test traffic in another terminal:
+- Ensure bridge is running and listening on expected port.
+- Ensure `NEXT_PUBLIC_RIVER_WS_URL` matches host + port reachable by browser.
+- Restart frontend after env var changes.
 
-```bash
-ping -c 5 1.1.1.1
-```
+## Scripts
 
-### Permission denied / cannot capture packets
+- `npm run dev` - start Next.js dev server
+- `npm run build` - production build
+- `npm run start` - run production server
+- `npm run lint` - lint codebase
+- `npm run river:interfaces` - list capture interfaces
+- `npm run river:bridge -- --iface <iface>` - start tshark bridge
+- `npm run river:test` - inject TCP byte traffic for testing
 
-If `tshark` reports permission issues on macOS:
+## Security and Ethics
 
-1. Re-run Wireshark installer and enable ChmodBPF (non-root capture).
-2. Retry bridge startup.
-3. If still blocked, run with `sudo`:
-
-```bash
-sudo npm run river:bridge -- --iface en0
-```
-
-### `tshark` not found or wrong path
-
-Check default path exists:
-
-```bash
-ls -l /Applications/Wireshark.app/Contents/MacOS/tshark
-```
-
-If missing, set `TSHARK_PATH`:
-
-```bash
-export TSHARK_PATH="/your/actual/path/to/tshark"
-npm run river:interfaces
-```
-
-### Frontend cannot connect to the bridge
-
-1. Ensure the bridge and frontend are using the same WebSocket port.
-2. If you changed bridge port, also set frontend URL:
-
-```bash
-export RIVER_WS_PORT=8788
-export NEXT_PUBLIC_RIVER_WS_URL="ws://localhost:8788"
-```
-
-3. Restart both terminals after changing env vars.
+Run packet capture only on networks and systems where you have explicit authorization.

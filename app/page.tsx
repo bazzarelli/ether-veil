@@ -20,10 +20,8 @@ export default function Home() {
           </p>
         </header>
 
-        <section className="mt-10 grid max-w-4xl gap-6 text-sm text-slate-200/80 sm:grid-cols-2">
-          <div className="space-y-3">
-            <EventLegend />
-          </div>
+        <section className="mt-10 w-full max-w-6xl text-slate-200/80">
+          <EventLegend />
         </section>
       </div>
 
