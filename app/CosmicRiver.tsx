@@ -60,6 +60,86 @@ const VAPOR_COLORS = {
   bloom: { r: 200, g: 40, b: 120 }, // Magenta-red bloom
 };
 
+// Decorative mote settings.
+const TEXTURE_MOTE_COLOR = { r: 60, g: 0, b: 0 };
+const TEXTURE_MOTE_ALPHA_BASE = 140;
+const TEXTURE_MOTE_ALPHA_DEPTH = 90;
+
+type VaporMotionPreset = "ambient" | "balanced" | "energetic";
+
+type VaporMotionConfig = {
+  riseTauSec: number;
+  fallTauSec: number;
+  maxDeltaPerSec: number;
+  scrollBase: number;
+  scrollByIntensity: number;
+  yPhaseBase: number;
+  yPhaseByIntensity: number;
+  centerlineBobPct: number;
+  centerlineBobFreq: number;
+  layerWarpYScale: number;
+  blobYJitterScale: number;
+  blurPx: number;
+  trailFadeAlpha: number;
+  minBlobs: number;
+  maxBlobBoost: number;
+};
+
+const VAPOR_PRESET: VaporMotionPreset = "balanced";
+const VAPOR_MOTION: Record<VaporMotionPreset, VaporMotionConfig> = {
+  ambient: {
+    riseTauSec: 1.1,
+    fallTauSec: 1.8,
+    maxDeltaPerSec: 0.45,
+    scrollBase: 0.03,
+    scrollByIntensity: 0.08,
+    yPhaseBase: 0.07,
+    yPhaseByIntensity: 0.01,
+    centerlineBobPct: 0.018,
+    centerlineBobFreq: 0.14,
+    layerWarpYScale: 0.75,
+    blobYJitterScale: 0.55,
+    blurPx: 3.6,
+    trailFadeAlpha: 0.12,
+    minBlobs: 5,
+    maxBlobBoost: 6,
+  },
+  balanced: {
+    riseTauSec: 0.7,
+    fallTauSec: 1.25,
+    maxDeltaPerSec: 0.75,
+    scrollBase: 0.035,
+    scrollByIntensity: 0.11,
+    yPhaseBase: 0.075,
+    yPhaseByIntensity: 0.015,
+    centerlineBobPct: 0.018,
+    centerlineBobFreq: 0.15,
+    layerWarpYScale: 0.7,
+    blobYJitterScale: 0.5,
+    blurPx: 2.6,
+    trailFadeAlpha: 0.16,
+    minBlobs: 5,
+    maxBlobBoost: 7,
+  },
+  energetic: {
+    riseTauSec: 0.45,
+    fallTauSec: 0.8,
+    maxDeltaPerSec: 1.1,
+    scrollBase: 0.045,
+    scrollByIntensity: 0.16,
+    yPhaseBase: 0.09,
+    yPhaseByIntensity: 0.03,
+    centerlineBobPct: 0.03,
+    centerlineBobFreq: 0.18,
+    layerWarpYScale: 1,
+    blobYJitterScale: 0.72,
+    blurPx: 1.6,
+    trailFadeAlpha: 0.28,
+    minBlobs: 6,
+    maxBlobBoost: 8,
+  },
+};
+
 // ─── TCP throughput tracker ────────────────────────────────────────────────────
 // Maintains a 3-second rolling window of byte counts and converts to a
 // normalised 0-1 intensity value.
@@ -205,6 +285,15 @@ export default function CosmicRiver() {
           z: number;
           speed: number;
         }[] = [];
+        const darkMotes: {
+          x: number;
+          y: number;
+          z: number;
+          speed: number;
+          driftSeed: number;
+          phase: number;
+          size: number;
+        }[] = [];
 
         const initParticles = () => {
           particles.length = 0;
@@ -216,6 +305,63 @@ export default function CosmicRiver() {
               speed: p.random(0.02, 0.08),
             });
           }
+
+          darkMotes.length = 0;
+          for (let i = 0; i < 180; i += 1) {
+            darkMotes.push({
+              x: p.random(-0.7, 0.7),
+              y: p.random(-0.45, 0.45),
+              z: p.random(0.06, 0.6),
+              speed: p.random(0.02, 0.04),
+              driftSeed: p.random(0, 1000),
+              phase: p.random(0, p.TWO_PI),
+              size: p.random(3.8, 8.6),
+            });
+          }
+        };
+
+        const drawDarkMotes = (now: number) => {
+          const gl = p.drawingContext as WebGLRenderingContext;
+          gl.disable(gl.DEPTH_TEST);
+          p.blendMode(p.ADD);
+          p.noStroke();
+          darkMotes.forEach((mote) => {
+            const nx = p.noise(
+              mote.driftSeed + now * 0.00004,
+              mote.y * 1.8 + now * 0.00002,
+            );
+            const ny = p.noise(
+              mote.driftSeed + 37.1 + now * 0.00003,
+              mote.x * 2.1 + now * 0.00002,
+            );
+            const driftX = (nx - 0.5) * 0.0022;
+            const driftY = (ny - 0.5) * 0.0017;
+            mote.x += mote.speed * 0.0013 + driftX;
+            mote.y +=
+              Math.sin(now * 0.0003 + mote.phase + mote.z * 8) * 0.00065 +
+              driftY;
+
+            if (mote.x > 0.72) mote.x = -0.72;
+            if (mote.x < -0.72) mote.x = 0.72;
+            if (mote.y > 0.5) mote.y = -0.5;
+            if (mote.y < -0.5) mote.y = 0.5;
+
+            const mx = mote.x * p.width;
+            const my = mote.y * p.height;
+            const alpha =
+              TEXTURE_MOTE_ALPHA_BASE + mote.z * TEXTURE_MOTE_ALPHA_DEPTH;
+            p.fill(
+              TEXTURE_MOTE_COLOR.r,
+              TEXTURE_MOTE_COLOR.g,
+              TEXTURE_MOTE_COLOR.b,
+              alpha,
+            );
+            p.push();
+            p.translate(mx, my, 0);
+            p.circle(0, 0, mote.size + mote.z * 2.4);
+            p.pop();
+          });
+          gl.enable(gl.DEPTH_TEST);
         };
 
         p.setup = () => {
@@ -306,18 +452,19 @@ export default function CosmicRiver() {
             // Alert symbols (portscan/malformed) get a fast "arrival pulse"
             // that decays over the first seconds.
             const alertEnvelope = isAlertSymbol ? Math.exp(-age * 2.6) : 0;
-            const alertPulse =
-              isAlertSymbol
-                ? 1 + (0.35 + 0.65 * Math.abs(Math.sin(age * 14))) * alertEnvelope
-                : 1;
-            const alertFadeBoost =
-              isAlertSymbol
-                ? p.constrain(
-                    fade * (1 + 0.7 * alertEnvelope + 0.5 * Math.abs(Math.sin(age * 16))),
-                    0,
-                    1,
-                  )
-                : fade;
+            const alertPulse = isAlertSymbol
+              ? 1 + (0.35 + 0.65 * Math.abs(Math.sin(age * 14))) * alertEnvelope
+              : 1;
+            const alertFadeBoost = isAlertSymbol
+              ? p.constrain(
+                  fade *
+                    (1 +
+                      0.7 * alertEnvelope +
+                      0.5 * Math.abs(Math.sin(age * 16))),
+                  0,
+                  1,
+                )
+              : fade;
             const size =
               symbol.size * pulse * alertPulse * (0.7 + symbol.strength * 0.3);
             const flow = p.noise(symbol.y * 2 + age * 0.4, symbol.type * 0.7);
@@ -403,6 +550,10 @@ export default function CosmicRiver() {
             }
             p.pop();
           });
+
+          // ── Subtle texture motes (always-on, traffic independent) ─────────
+          // Drawn last and at a closer z so they are visible over bright layers.
+          drawDarkMotes(now);
         };
       };
 
@@ -451,6 +602,7 @@ export default function CosmicRiver() {
 
     let rafId: number;
     const ctx = canvas.getContext("2d")!;
+    const motion = VAPOR_MOTION[VAPOR_PRESET];
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -496,24 +648,37 @@ export default function CosmicRiver() {
       return v;
     };
 
-    // ── Smooth intensity (gentle anti-jitter) ──────────────────────────
+    // ── Smooth intensity and ramp limiting (anti-jitter) ───────────────
     let smoothIntensity = 0;
-    const intensitySmoothness = 0.85; // Gentle smoothing
+    let lastTs = 0;
 
     const draw = (ts: number) => {
       const t = ts * 0.001;
       const w = canvas.width;
       const h = canvas.height;
+      const dt = lastTs > 0 ? Math.min(0.12, (ts - lastTs) / 1000) : 1 / 60;
+      lastTs = ts;
       const targetIntensity =
         (window as Window & { __tcpIntensity?: number }).__tcpIntensity ?? 0;
 
-      // Exponential smoothing for intensity (gentle anti-jitter)
-      smoothIntensity =
-        smoothIntensity * intensitySmoothness +
-        targetIntensity * (1 - intensitySmoothness);
+      // Faster rise / slower fall makes spikes feel fluid instead of twitchy.
+      const tau =
+        targetIntensity > smoothIntensity
+          ? motion.riseTauSec
+          : motion.fallTauSec;
+      const smoothingAlpha = 1 - Math.exp(-dt / Math.max(0.001, tau));
+      const smoothedTarget =
+        smoothIntensity + (targetIntensity - smoothIntensity) * smoothingAlpha;
+      const maxDelta = motion.maxDeltaPerSec * dt;
+      const delta = smoothedTarget - smoothIntensity;
+      smoothIntensity += Math.max(-maxDelta, Math.min(maxDelta, delta));
       const intensity = smoothIntensity;
 
-      ctx.clearRect(0, 0, w, h);
+      // Soft trail decay keeps motion cohesive and lava-like.
+      ctx.globalCompositeOperation = "source-over";
+      ctx.filter = "none";
+      ctx.fillStyle = `rgba(0, 0, 0, ${motion.trailFadeAlpha})`;
+      ctx.fillRect(0, 0, w, h);
 
       if (intensity < 0.01) {
         rafId = requestAnimationFrame(draw);
@@ -523,8 +688,15 @@ export default function CosmicRiver() {
       // How many smoke layers and how tall the band is
       const layers = 6;
       const spread = h * (0.06 + intensity * 0.36);
-      const scrollSpd = 0.04 + intensity * 0.22;
-      const cy = h * 0.5 + h * 0.04 * Math.sin(t * 0.18 + 1.3);
+      const scrollSpd =
+        motion.scrollBase + intensity * motion.scrollByIntensity;
+      const yPhaseSpd =
+        motion.yPhaseBase + intensity * motion.yPhaseByIntensity;
+      const cy =
+        h * 0.5 +
+        h *
+          motion.centerlineBobPct *
+          Math.sin(t * motion.centerlineBobFreq + 1.3);
 
       for (let li = 0; li < layers; li++) {
         const lf = li / layers;
@@ -533,11 +705,14 @@ export default function CosmicRiver() {
         const ty = t * 0.08 + li * 1.9;
 
         // Sample fBm to get this layer's centre y and horizontal position
-        const warpY = (fbm(tx * 0.4, ty * 0.4) - 0.5) * spread * 1.4;
+        const warpY =
+          (fbm(tx * 0.4, ty * 0.4) - 0.5) * spread * motion.layerWarpYScale;
         const warpX = (fbm(tx * 0.3 + 5.2, ty * 0.3 + 9.1) - 0.5) * w * 0.25;
 
-        // Horizontal strip of overlapping blobs
-        const blobCount = 5 + Math.floor(intensity * 7);
+        // Horizontal strip of overlapping blobs with continuous density.
+        const rawBlobCount = motion.minBlobs + intensity * motion.maxBlobBoost;
+        const blobCount =
+          Math.floor(rawBlobCount) + (Math.random() < rawBlobCount % 1 ? 1 : 0);
         for (let bi = 0; bi < blobCount; bi++) {
           const bf = bi / blobCount;
           const bx =
@@ -549,7 +724,9 @@ export default function CosmicRiver() {
           const by =
             cy +
             warpY +
-            (noise2(bi * 2.3 + t * 0.12, li * 1.7) - 0.5) * spread * 0.9;
+            (noise2(bi * 2.3 + t * yPhaseSpd, li * 1.7) - 0.5) *
+              spread *
+              motion.blobYJitterScale;
           const brad =
             spread * (0.5 + noise1(bi * 3.1 + li * 0.9 + t * 0.07) * 0.8);
 
@@ -575,6 +752,7 @@ export default function CosmicRiver() {
           grad.addColorStop(1, "rgba(0,0,0,0)");
 
           ctx.globalCompositeOperation = "lighter";
+          ctx.filter = `blur(${motion.blurPx}px)`;
           ctx.fillStyle = grad;
           ctx.beginPath();
           ctx.ellipse(bx, by, brad, brad * 0.38, 0, 0, Math.PI * 2);
@@ -591,9 +769,12 @@ export default function CosmicRiver() {
         coreGrad.addColorStop(0.5, `rgba(${r},${g},${b},${coreAlpha})`);
         coreGrad.addColorStop(1, `rgba(${r},${g},${b},0)`);
         ctx.globalCompositeOperation = "lighter";
+        ctx.filter = "none";
         ctx.fillStyle = coreGrad;
         ctx.fillRect(0, cy - 4, w, 8);
       }
+
+      ctx.filter = "none";
 
       rafId = requestAnimationFrame(draw);
     };
