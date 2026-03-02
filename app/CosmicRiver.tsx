@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type p5 from "p5";
 
 type Pulse = {
@@ -61,6 +61,7 @@ const VAPOR_COLORS = {
 };
 
 // Decorative mote settings.
+const ENABLE_TEXTURE_MOTES = false;
 const TEXTURE_MOTE_COLOR = { r: 60, g: 0, b: 0 };
 const TEXTURE_MOTE_ALPHA_BASE = 140;
 const TEXTURE_MOTE_ALPHA_DEPTH = 90;
@@ -151,6 +152,146 @@ const VAPOR_MOTION: Record<VaporMotionPreset, VaporMotionConfig> = {
 
 const TCP_SCALE_BPS = 70_000_000; // 70 MB/s → intensity 1.0
 
+type VisualControls = {
+  tcpScaleBps: number;
+  intensityGain: number;
+  intensityMin: number;
+  intensityMax: number;
+  riseTauSec: number;
+  fallTauSec: number;
+  maxDeltaPerSec: number;
+  layers: number;
+  spreadBase: number;
+  spreadByIntensity: number;
+  blurPx: number;
+  trailFadeAlpha: number;
+  minBlobs: number;
+  maxBlobBoost: number;
+  scrollBase: number;
+  scrollByIntensity: number;
+  yPhaseBase: number;
+  yPhaseByIntensity: number;
+  centerlineBobPct: number;
+  centerlineBobFreq: number;
+  layerWarpYScale: number;
+  blobYJitterScale: number;
+  enableTextureMotes: boolean;
+  textureMoteCount: number;
+  textureMoteSpeedMul: number;
+  textureMoteSizeMul: number;
+  textureMoteAlphaMul: number;
+};
+
+const DEFAULT_VISUAL_CONTROLS: VisualControls = {
+  tcpScaleBps: TCP_SCALE_BPS,
+  intensityGain: 1,
+  intensityMin: 0,
+  intensityMax: 1,
+  riseTauSec: VAPOR_MOTION[VAPOR_PRESET].riseTauSec,
+  fallTauSec: VAPOR_MOTION[VAPOR_PRESET].fallTauSec,
+  maxDeltaPerSec: VAPOR_MOTION[VAPOR_PRESET].maxDeltaPerSec,
+  layers: 6,
+  spreadBase: 0.06,
+  spreadByIntensity: 0.36,
+  blurPx: VAPOR_MOTION[VAPOR_PRESET].blurPx,
+  trailFadeAlpha: VAPOR_MOTION[VAPOR_PRESET].trailFadeAlpha,
+  minBlobs: VAPOR_MOTION[VAPOR_PRESET].minBlobs,
+  maxBlobBoost: VAPOR_MOTION[VAPOR_PRESET].maxBlobBoost,
+  scrollBase: VAPOR_MOTION[VAPOR_PRESET].scrollBase,
+  scrollByIntensity: VAPOR_MOTION[VAPOR_PRESET].scrollByIntensity,
+  yPhaseBase: VAPOR_MOTION[VAPOR_PRESET].yPhaseBase,
+  yPhaseByIntensity: VAPOR_MOTION[VAPOR_PRESET].yPhaseByIntensity,
+  centerlineBobPct: VAPOR_MOTION[VAPOR_PRESET].centerlineBobPct,
+  centerlineBobFreq: VAPOR_MOTION[VAPOR_PRESET].centerlineBobFreq,
+  layerWarpYScale: VAPOR_MOTION[VAPOR_PRESET].layerWarpYScale,
+  blobYJitterScale: VAPOR_MOTION[VAPOR_PRESET].blobYJitterScale,
+  enableTextureMotes: ENABLE_TEXTURE_MOTES,
+  textureMoteCount: 180,
+  textureMoteSpeedMul: 1,
+  textureMoteSizeMul: 1,
+  textureMoteAlphaMul: 1,
+};
+
+const PERFORMANCE_VISUAL_OVERRIDES: Partial<VisualControls> = {
+  riseTauSec: 0.85,
+  fallTauSec: 1.4,
+  layers: 4,
+  blurPx: 1.2,
+  trailFadeAlpha: 0.22,
+  minBlobs: 3,
+  maxBlobBoost: 4,
+  spreadByIntensity: 0.3,
+  scrollByIntensity: 0.08,
+  blobYJitterScale: 0.35,
+  enableTextureMotes: false,
+  textureMoteCount: 0,
+};
+
+const VISUAL_CONTROLS_STORAGE_KEY = "cosmic-river-visual-controls-v1";
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+type SliderControlProps = {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (next: number) => void;
+  format?: (value: number) => string;
+};
+
+function SliderControl({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  format,
+}: SliderControlProps) {
+  return (
+    <label className="block text-xs text-slate-200">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span>{label}</span>
+        <span className="font-mono text-[11px] text-slate-400">
+          {format ? format(value) : value.toFixed(2)}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="h-1.5 w-full cursor-pointer accent-fuchsia-400"
+      />
+    </label>
+  );
+}
+
+type ToggleControlProps = {
+  label: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+};
+
+function ToggleControl({ label, checked, onChange }: ToggleControlProps) {
+  return (
+    <label className="flex items-center justify-between gap-2 text-xs text-slate-200">
+      <span>{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-4 w-4 cursor-pointer accent-fuchsia-400"
+      />
+    </label>
+  );
+}
+
 class TcpRateTracker {
   private samples: { ts: number; bytes: number }[] = [];
   private windowMs = 3000;
@@ -167,10 +308,10 @@ class TcpRateTracker {
     return total / (this.windowMs / 1000);
   }
 
-  getIntensity(): number {
+  getIntensity(scaleBps = TCP_SCALE_BPS): number {
     const bps = this.getBytesPerSecond();
     // Logarithmic so small traffic is visible, large traffic saturates cleanly
-    const raw = Math.log1p(bps) / Math.log1p(TCP_SCALE_BPS);
+    const raw = Math.log1p(bps) / Math.log1p(scaleBps);
     return Math.min(1, raw);
   }
 }
@@ -178,6 +319,58 @@ class TcpRateTracker {
 export default function CosmicRiver() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const vaporRef = useRef<HTMLCanvasElement | null>(null);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [visualControls, setVisualControls] = useState<VisualControls>(
+    DEFAULT_VISUAL_CONTROLS,
+  );
+  const controlsRef = useRef(visualControls);
+
+  const setControls = (
+    updater: (current: VisualControls) => VisualControls,
+  ) => {
+    setVisualControls((current) => {
+      const next = updater(current);
+      controlsRef.current = next;
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(VISUAL_CONTROLS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<VisualControls>;
+      const merged = { ...DEFAULT_VISUAL_CONTROLS, ...parsed };
+      setControls(() => merged);
+    } catch {
+      // ignore invalid persisted controls
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      VISUAL_CONTROLS_STORAGE_KEY,
+      JSON.stringify(visualControls),
+    );
+  }, [visualControls]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (event.key.toLowerCase() === "c") {
+        setControlsOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const updateControl = <K extends keyof VisualControls>(
+    key: K,
+    value: VisualControls[K],
+  ) => {
+    setControls((current) => ({ ...current, [key]: value }));
+  };
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -210,8 +403,13 @@ export default function CosmicRiver() {
       // Debug helper — open browser console and call: riverDebug()
       // Shows live TCP intensity so you can confirm data is flowing.
       (window as Window & { riverDebug?: () => void }).riverDebug = () => {
+        const c = controlsRef.current;
         const bps = tcpTracker.getBytesPerSecond();
-        const intensity = tcpTracker.getIntensity();
+        const intensity = clamp(
+          tcpTracker.getIntensity(c.tcpScaleBps) * c.intensityGain,
+          c.intensityMin,
+          c.intensityMax,
+        );
         console.log(
           "%c[River TCP Vapor]",
           "color: #40e8d0; font-weight: bold",
@@ -226,7 +424,12 @@ export default function CosmicRiver() {
 
       // Continuous debug logging (optional - comment out if too noisy)
       setInterval(() => {
-        const intensity = tcpTracker.getIntensity();
+        const c = controlsRef.current;
+        const intensity = clamp(
+          tcpTracker.getIntensity(c.tcpScaleBps) * c.intensityGain,
+          c.intensityMin,
+          c.intensityMax,
+        );
         if (intensity > 0.01) {
           console.log(
             "%c[TCP Vapor]",
@@ -295,6 +498,16 @@ export default function CosmicRiver() {
           size: number;
         }[] = [];
 
+        const spawnDarkMote = () => ({
+          x: p.random(-0.7, 0.7),
+          y: p.random(-0.45, 0.45),
+          z: p.random(0.06, 0.6),
+          speed: p.random(0.02, 0.04),
+          driftSeed: p.random(0, 1000),
+          phase: p.random(0, p.TWO_PI),
+          size: p.random(3.8, 8.6),
+        });
+
         const initParticles = () => {
           particles.length = 0;
           for (let i = 0; i < 120; i += 1) {
@@ -307,20 +520,23 @@ export default function CosmicRiver() {
           }
 
           darkMotes.length = 0;
-          for (let i = 0; i < 180; i += 1) {
-            darkMotes.push({
-              x: p.random(-0.7, 0.7),
-              y: p.random(-0.45, 0.45),
-              z: p.random(0.06, 0.6),
-              speed: p.random(0.02, 0.04),
-              driftSeed: p.random(0, 1000),
-              phase: p.random(0, p.TWO_PI),
-              size: p.random(3.8, 8.6),
-            });
+          const c = controlsRef.current;
+          if (!c.enableTextureMotes) return;
+          for (let i = 0; i < c.textureMoteCount; i += 1) {
+            darkMotes.push(spawnDarkMote());
           }
         };
 
         const drawDarkMotes = (now: number) => {
+          const c = controlsRef.current;
+          if (!c.enableTextureMotes) return;
+          while (darkMotes.length < c.textureMoteCount) {
+            darkMotes.push(spawnDarkMote());
+          }
+          if (darkMotes.length > c.textureMoteCount) {
+            darkMotes.length = c.textureMoteCount;
+          }
+          if (darkMotes.length === 0) return;
           const gl = p.drawingContext as WebGLRenderingContext;
           gl.disable(gl.DEPTH_TEST);
           p.blendMode(p.ADD);
@@ -336,9 +552,11 @@ export default function CosmicRiver() {
             );
             const driftX = (nx - 0.5) * 0.0022;
             const driftY = (ny - 0.5) * 0.0017;
-            mote.x += mote.speed * 0.0013 + driftX;
+            mote.x += mote.speed * 0.0013 * c.textureMoteSpeedMul + driftX;
             mote.y +=
-              Math.sin(now * 0.0003 + mote.phase + mote.z * 8) * 0.00065 +
+              Math.sin(now * 0.0003 + mote.phase + mote.z * 8) *
+                0.00065 *
+                c.textureMoteSpeedMul +
               driftY;
 
             if (mote.x > 0.72) mote.x = -0.72;
@@ -349,7 +567,8 @@ export default function CosmicRiver() {
             const mx = mote.x * p.width;
             const my = mote.y * p.height;
             const alpha =
-              TEXTURE_MOTE_ALPHA_BASE + mote.z * TEXTURE_MOTE_ALPHA_DEPTH;
+              (TEXTURE_MOTE_ALPHA_BASE + mote.z * TEXTURE_MOTE_ALPHA_DEPTH) *
+              c.textureMoteAlphaMul;
             p.fill(
               TEXTURE_MOTE_COLOR.r,
               TEXTURE_MOTE_COLOR.g,
@@ -358,9 +577,10 @@ export default function CosmicRiver() {
             );
             p.push();
             p.translate(mx, my, 0);
-            p.circle(0, 0, mote.size + mote.z * 2.4);
+            p.circle(0, 0, (mote.size + mote.z * 2.4) * c.textureMoteSizeMul);
             p.pop();
           });
+          p.blendMode(p.BLEND);
           gl.enable(gl.DEPTH_TEST);
         };
 
@@ -401,8 +621,13 @@ export default function CosmicRiver() {
           };
 
           // Publish TCP intensity for vapor wave visualization
+          const c = controlsRef.current;
           (window as Window & { __tcpIntensity?: number }).__tcpIntensity =
-            tcpTracker.getIntensity();
+            clamp(
+              tcpTracker.getIntensity(c.tcpScaleBps) * c.intensityGain,
+              c.intensityMin,
+              c.intensityMax,
+            );
 
           if (now > nextRippleAt) {
             addPulse({ type: "udp", strength: 0.6 });
@@ -602,7 +827,6 @@ export default function CosmicRiver() {
 
     let rafId: number;
     const ctx = canvas.getContext("2d")!;
-    const motion = VAPOR_MOTION[VAPOR_PRESET];
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -653,6 +877,7 @@ export default function CosmicRiver() {
     let lastTs = 0;
 
     const draw = (ts: number) => {
+      const c = controlsRef.current;
       const t = ts * 0.001;
       const w = canvas.width;
       const h = canvas.height;
@@ -664,12 +889,12 @@ export default function CosmicRiver() {
       // Faster rise / slower fall makes spikes feel fluid instead of twitchy.
       const tau =
         targetIntensity > smoothIntensity
-          ? motion.riseTauSec
-          : motion.fallTauSec;
+          ? c.riseTauSec
+          : c.fallTauSec;
       const smoothingAlpha = 1 - Math.exp(-dt / Math.max(0.001, tau));
       const smoothedTarget =
         smoothIntensity + (targetIntensity - smoothIntensity) * smoothingAlpha;
-      const maxDelta = motion.maxDeltaPerSec * dt;
+      const maxDelta = c.maxDeltaPerSec * dt;
       const delta = smoothedTarget - smoothIntensity;
       smoothIntensity += Math.max(-maxDelta, Math.min(maxDelta, delta));
       const intensity = smoothIntensity;
@@ -677,7 +902,7 @@ export default function CosmicRiver() {
       // Soft trail decay keeps motion cohesive and lava-like.
       ctx.globalCompositeOperation = "source-over";
       ctx.filter = "none";
-      ctx.fillStyle = `rgba(0, 0, 0, ${motion.trailFadeAlpha})`;
+      ctx.fillStyle = `rgba(0, 0, 0, ${c.trailFadeAlpha})`;
       ctx.fillRect(0, 0, w, h);
 
       if (intensity < 0.01) {
@@ -686,17 +911,15 @@ export default function CosmicRiver() {
       }
 
       // How many smoke layers and how tall the band is
-      const layers = 6;
-      const spread = h * (0.06 + intensity * 0.36);
-      const scrollSpd =
-        motion.scrollBase + intensity * motion.scrollByIntensity;
-      const yPhaseSpd =
-        motion.yPhaseBase + intensity * motion.yPhaseByIntensity;
+      const layers = c.layers;
+      const spread = h * (c.spreadBase + intensity * c.spreadByIntensity);
+      const scrollSpd = c.scrollBase + intensity * c.scrollByIntensity;
+      const yPhaseSpd = c.yPhaseBase + intensity * c.yPhaseByIntensity;
       const cy =
         h * 0.5 +
         h *
-          motion.centerlineBobPct *
-          Math.sin(t * motion.centerlineBobFreq + 1.3);
+          c.centerlineBobPct *
+          Math.sin(t * c.centerlineBobFreq + 1.3);
 
       for (let li = 0; li < layers; li++) {
         const lf = li / layers;
@@ -706,11 +929,11 @@ export default function CosmicRiver() {
 
         // Sample fBm to get this layer's centre y and horizontal position
         const warpY =
-          (fbm(tx * 0.4, ty * 0.4) - 0.5) * spread * motion.layerWarpYScale;
+          (fbm(tx * 0.4, ty * 0.4) - 0.5) * spread * c.layerWarpYScale;
         const warpX = (fbm(tx * 0.3 + 5.2, ty * 0.3 + 9.1) - 0.5) * w * 0.25;
 
         // Horizontal strip of overlapping blobs with continuous density.
-        const rawBlobCount = motion.minBlobs + intensity * motion.maxBlobBoost;
+        const rawBlobCount = c.minBlobs + intensity * c.maxBlobBoost;
         const blobCount =
           Math.floor(rawBlobCount) + (Math.random() < rawBlobCount % 1 ? 1 : 0);
         for (let bi = 0; bi < blobCount; bi++) {
@@ -726,7 +949,7 @@ export default function CosmicRiver() {
             warpY +
             (noise2(bi * 2.3 + t * yPhaseSpd, li * 1.7) - 0.5) *
               spread *
-              motion.blobYJitterScale;
+              c.blobYJitterScale;
           const brad =
             spread * (0.5 + noise1(bi * 3.1 + li * 0.9 + t * 0.07) * 0.8);
 
@@ -752,7 +975,7 @@ export default function CosmicRiver() {
           grad.addColorStop(1, "rgba(0,0,0,0)");
 
           ctx.globalCompositeOperation = "lighter";
-          ctx.filter = `blur(${motion.blurPx}px)`;
+          ctx.filter = `blur(${c.blurPx}px)`;
           ctx.fillStyle = grad;
           ctx.beginPath();
           ctx.ellipse(bx, by, brad, brad * 0.38, 0, 0, Math.PI * 2);
@@ -794,6 +1017,258 @@ export default function CosmicRiver() {
         className="pointer-events-none absolute inset-0"
         style={{ mixBlendMode: "screen" }}
       />
+      <button
+        type="button"
+        onClick={() => setControlsOpen((open) => !open)}
+        className="absolute bottom-4 right-4 z-50 rounded-md border border-fuchsia-400/40 bg-slate-950/70 px-3 py-1 text-xs text-slate-100 backdrop-blur"
+      >
+        Controls (C)
+      </button>
+      {controlsOpen ? (
+        <div className="absolute right-4 top-14 z-50 max-h-[80vh] w-[340px] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950/90 p-4 shadow-2xl backdrop-blur">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-100">
+              Cosmic River Controls
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setControls((current) => ({
+                    ...current,
+                    ...PERFORMANCE_VISUAL_OVERRIDES,
+                  }))
+                }
+                className="rounded border border-amber-500/60 px-2 py-1 text-[11px] text-amber-200"
+              >
+                Performance
+              </button>
+              <button
+                type="button"
+                onClick={() => setControls(() => DEFAULT_VISUAL_CONTROLS)}
+                className="rounded border border-slate-600 px-2 py-1 text-[11px] text-slate-200"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+          <p className="mb-4 text-[11px] text-slate-400">
+            Press C to show/hide. Use this to tune smoothness, density, and
+            traffic mapping in real time. Settings are saved locally.
+          </p>
+          <div className="space-y-4">
+            <div className="space-y-2 rounded-lg border border-slate-800 p-3">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wide text-fuchsia-300">
+                Download Mapping
+              </h4>
+              <SliderControl
+                label="TCP Scale (MB/s)"
+                value={visualControls.tcpScaleBps / 1_000_000}
+                min={10}
+                max={300}
+                step={1}
+                format={(value) => `${value.toFixed(0)} MB/s`}
+                onChange={(value) => updateControl("tcpScaleBps", value * 1_000_000)}
+              />
+              <SliderControl
+                label="Intensity Gain"
+                value={visualControls.intensityGain}
+                min={0.4}
+                max={2.5}
+                step={0.01}
+                onChange={(value) => updateControl("intensityGain", value)}
+              />
+              <SliderControl
+                label="Intensity Min"
+                value={visualControls.intensityMin}
+                min={0}
+                max={1}
+                step={0.01}
+                onChange={(value) =>
+                  setControls((current) => ({
+                    ...current,
+                    intensityMin: value,
+                    intensityMax: Math.max(current.intensityMax, value),
+                  }))
+                }
+              />
+              <SliderControl
+                label="Intensity Max"
+                value={visualControls.intensityMax}
+                min={0}
+                max={1}
+                step={0.01}
+                onChange={(value) =>
+                  setControls((current) => ({
+                    ...current,
+                    intensityMax: value,
+                    intensityMin: Math.min(current.intensityMin, value),
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-slate-800 p-3">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wide text-fuchsia-300">
+                Smoothness
+              </h4>
+              <SliderControl
+                label="Rise Smoothing"
+                value={visualControls.riseTauSec}
+                min={0.1}
+                max={2.5}
+                step={0.01}
+                format={(value) => `${value.toFixed(2)}s`}
+                onChange={(value) => updateControl("riseTauSec", value)}
+              />
+              <SliderControl
+                label="Fall Smoothing"
+                value={visualControls.fallTauSec}
+                min={0.1}
+                max={3}
+                step={0.01}
+                format={(value) => `${value.toFixed(2)}s`}
+                onChange={(value) => updateControl("fallTauSec", value)}
+              />
+              <SliderControl
+                label="Max Intensity Delta/s"
+                value={visualControls.maxDeltaPerSec}
+                min={0.1}
+                max={2}
+                step={0.01}
+                onChange={(value) => updateControl("maxDeltaPerSec", value)}
+              />
+              <SliderControl
+                label="Trail Blend"
+                value={visualControls.trailFadeAlpha}
+                min={0.02}
+                max={0.5}
+                step={0.01}
+                onChange={(value) => updateControl("trailFadeAlpha", value)}
+              />
+              <SliderControl
+                label="Blur"
+                value={visualControls.blurPx}
+                min={0}
+                max={8}
+                step={0.1}
+                format={(value) => `${value.toFixed(1)}px`}
+                onChange={(value) => updateControl("blurPx", value)}
+              />
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-slate-800 p-3">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wide text-fuchsia-300">
+                Vapor Shape
+              </h4>
+              <SliderControl
+                label="Layers"
+                value={visualControls.layers}
+                min={2}
+                max={12}
+                step={1}
+                format={(value) => `${value.toFixed(0)}`}
+                onChange={(value) => updateControl("layers", Math.round(value))}
+              />
+              <SliderControl
+                label="Density Floor"
+                value={visualControls.minBlobs}
+                min={2}
+                max={12}
+                step={1}
+                format={(value) => `${value.toFixed(0)}`}
+                onChange={(value) => updateControl("minBlobs", Math.round(value))}
+              />
+              <SliderControl
+                label="Density Boost"
+                value={visualControls.maxBlobBoost}
+                min={1}
+                max={14}
+                step={0.25}
+                onChange={(value) => updateControl("maxBlobBoost", value)}
+              />
+              <SliderControl
+                label="Spread Base"
+                value={visualControls.spreadBase}
+                min={0.01}
+                max={0.2}
+                step={0.005}
+                onChange={(value) => updateControl("spreadBase", value)}
+              />
+              <SliderControl
+                label="Spread by Intensity"
+                value={visualControls.spreadByIntensity}
+                min={0.05}
+                max={0.8}
+                step={0.01}
+                onChange={(value) => updateControl("spreadByIntensity", value)}
+              />
+              <SliderControl
+                label="Flow Speed"
+                value={visualControls.scrollByIntensity}
+                min={0}
+                max={0.35}
+                step={0.005}
+                onChange={(value) => updateControl("scrollByIntensity", value)}
+              />
+              <SliderControl
+                label="Vertical Jitter"
+                value={visualControls.blobYJitterScale}
+                min={0}
+                max={1.5}
+                step={0.01}
+                onChange={(value) => updateControl("blobYJitterScale", value)}
+              />
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-slate-800 p-3">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wide text-fuchsia-300">
+                Decorative Particles
+              </h4>
+              <ToggleControl
+                label="Enable Texture Motes"
+                checked={visualControls.enableTextureMotes}
+                onChange={(value) => updateControl("enableTextureMotes", value)}
+              />
+              <SliderControl
+                label="Mote Count"
+                value={visualControls.textureMoteCount}
+                min={0}
+                max={260}
+                step={1}
+                format={(value) => `${value.toFixed(0)}`}
+                onChange={(value) =>
+                  updateControl("textureMoteCount", Math.round(value))
+                }
+              />
+              <SliderControl
+                label="Mote Speed"
+                value={visualControls.textureMoteSpeedMul}
+                min={0.1}
+                max={2.5}
+                step={0.01}
+                onChange={(value) => updateControl("textureMoteSpeedMul", value)}
+              />
+              <SliderControl
+                label="Mote Size"
+                value={visualControls.textureMoteSizeMul}
+                min={0.2}
+                max={2.5}
+                step={0.01}
+                onChange={(value) => updateControl("textureMoteSizeMul", value)}
+              />
+              <SliderControl
+                label="Mote Opacity"
+                value={visualControls.textureMoteAlphaMul}
+                min={0}
+                max={2}
+                step={0.01}
+                onChange={(value) => updateControl("textureMoteAlphaMul", value)}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
