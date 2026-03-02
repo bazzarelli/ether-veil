@@ -23,8 +23,8 @@ This repository is intended for classroom and community use.
 Clone and install:
 
 ```bash
-git clone https://github.com/<your-org-or-user>/shark-cosmic-river.git
-cd shark-cosmic-river
+git clone https://github.com/bazzarelli/ether-veil.git
+cd ether-veil
 ```
 
 ### macOS / Linux
