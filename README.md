@@ -1,4 +1,4 @@
-# Shark Cosmic River
+# Ether Veil
 
 Real-time, art-forward network activity visualization built with Next.js and p5.js.
 
