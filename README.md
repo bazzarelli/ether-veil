@@ -1,5 +1,7 @@
 # Ether Veil
 
+<img width="1784" height="1896" alt="Screenshot 2026-03-02 at 8 02 52 AM" src="https://github.com/user-attachments/assets/243d4ad0-e05c-42a5-9d32-81385ca501e5" />
+
 Real-time, art-forward network activity visualization built with Next.js and p5.js.
 
 The app renders ambient particles, protocol symbols (TCP/UDP/DNS/Portscan/Malformed/Hierarchy), and a TCP-intensity vapor field from live packet events.
