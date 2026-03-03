@@ -2,6 +2,8 @@
 
 <img width="1784" height="1896" alt="Screenshot 2026-03-02 at 8 02 52 AM" src="https://github.com/user-attachments/assets/243d4ad0-e05c-42a5-9d32-81385ca501e5" />
 
+Does looking at Wireshark logs repulse you? Wouldn't it be nice if you could see the log data at a glance in a beautiful visualization?
+
 Real-time, art-forward network activity visualization built with Next.js and p5.js.
 
 The app renders ambient particles, protocol symbols (TCP/UDP/DNS/Portscan/Malformed/Hierarchy), and a TCP-intensity vapor field from live packet events.
@@ -58,39 +60,6 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## LAN Classroom Setup
-
-If students should view the same visualization from your machine:
-
-1. Start Next on all interfaces:
-
-```bash
-npm run dev -- -H 0.0.0.0
-```
-
-2. Point frontend WebSocket to your host IP (example `192.168.1.25`):
-
-```bash
-export NEXT_PUBLIC_RIVER_WS_URL="ws://192.168.1.25:8787"
-```
-
-3. Ensure firewall allows inbound traffic on ports `3000` and `8787`.
-
-4. Students open:
-
-```text
-http://192.168.1.25:3000
-```
-
-Note: They will see events captured from the interface running on your host. On switched networks this is usually host-local traffic unless you have mirrored/SPAN visibility.
-
-## Environment Variables
-
-- `NEXT_PUBLIC_RIVER_WS_URL` (default `ws://localhost:8787`)
-- `RIVER_WS_PORT` (default `8787`)
-- `RIVER_RATE_MS` (event throttle)
-- `RIVER_TCP_FLUSH_MS` (TCP byte flush interval)
-- `TSHARK_PATH` (custom path to tshark binary)
 
 ## Troubleshooting
 
