@@ -84,7 +84,7 @@ echo "A. Test visualization manually (verify it works):"
 echo "   1. Open http://localhost:3000"
 echo "   2. Open browser console (F12)"
 echo "   3. Run: window.pushRiverEvent({ type: 'portscan', strength: 1.8 })"
-echo "   4. You should see a RED DIAMOND appear"
+echo "   4. You should see a RED ❌ appear"
 echo ""
 echo "B. Test with actual nmap scan:"
 if [ ! -z "$GATEWAY" ]; then

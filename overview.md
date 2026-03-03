@@ -1,12 +1,9 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
 **shark-cosmic-river** is a real-time network traffic visualization application that captures packets via Wireshark/tshark and renders them as an interactive "cosmic river" visualization using WebGL shaders and p5.js.
 
 The application consists of two main components:
+
 1. **Next.js frontend** - Real-time WebGL visualization with floating packet symbols
 2. **Node.js bridge** - WebSocket server that spawns tshark and streams parsed packet events
 
@@ -66,6 +63,7 @@ The frontend will connect to the WebSocket server at `ws://localhost:8787` and b
 ### Backend Bridge (`scripts/lan-bridge.mjs`)
 
 Node.js WebSocket server that:
+
 1. Spawns `tshark` as a subprocess with JSON output (`-T ek`)
 2. Parses packet metadata (protocols, ports, flags, frame length)
 3. Classifies packets into event types (tcp, udp, dns, portscan, malformed, hierarchy)
@@ -75,30 +73,33 @@ Node.js WebSocket server that:
 7. Broadcasts events as JSON to all connected WebSocket clients
 
 **Key environment variables:**
+
 - `TSHARK_PATH` - Path to tshark binary (default: macOS Wireshark.app bundle path)
 - `RIVER_WS_PORT` - WebSocket listen port (default: 8787)
 - `RIVER_RATE_MS` - Per-event-type rate limit in milliseconds (default: 80)
 - `RIVER_TCP_FLUSH_MS` - TCP byte accumulator flush interval (default: 200)
 
 **Frontend environment variables:**
+
 - `NEXT_PUBLIC_RIVER_WS_URL` - WebSocket server URL (default: `ws://localhost:8787`)
 
 ### Event Type Classification
 
 The bridge classifies packets into these types (symbol rendering in CosmicRiver.tsx):
 
-| Type | Visual | Trigger | Color |
-|------|--------|---------|-------|
-| `dns` | Filled triangle | DNS query present | Pink (255,120,200) |
-| `tcp` | Filled circle | TCP port detected | Cyan (120,220,255) |
-| `udp` | Hollow circle | UDP port detected | Blue (120,180,255) |
-| `portscan` | Diamond | 8+ SYN packets to different ports from same source in 3s | Red (255,90,80) |
-| `malformed` | 8-pointed star | Malformed protocol flag in frame | Yellow (255,190,100) |
-| `hierarchy` | Chevron | 5+ protocol layers, TLS, ARP, or ICMPv6 | Purple (190,140,255) |
+| Type        | Visual          | Trigger                                                  | Color                |
+| ----------- | --------------- | -------------------------------------------------------- | -------------------- |
+| `dns`       | Filled triangle | DNS query present                                        | Pink (255,120,200)   |
+| `tcp`       | Filled circle   | TCP port detected                                        | Cyan (120,220,255)   |
+| `udp`       | Hollow circle   | UDP port detected                                        | Blue (120,180,255)   |
+| `portscan`  | Diamond         | 8+ SYN packets to different ports from same source in 3s | Red (255,90,80)      |
+| `malformed` | 8-pointed star  | Malformed protocol flag in frame                         | Yellow (255,190,100) |
+| `hierarchy` | Chevron         | 5+ protocol layers, TLS, ARP, or ICMPv6                  | Purple (190,140,255) |
 
 ### TCP Throughput Visualization
 
 The TCP vapor wave effect intensity is driven by a 3-second rolling window of TCP byte counts:
+
 - **Scale reference**: 70 MB/s → intensity 1.0 (full saturation)
 - Intensity uses logarithmic scaling: `log(1 + bps) / log(1 + 70_000_000)`
 - The bridge accumulates frame lengths (`frame.len`) for any packet with a TCP port
@@ -116,18 +117,20 @@ The TCP vapor wave effect intensity is driven by a 3-second rolling window of TC
 **Manual event injection** (useful when bridge is not running or for testing specific scenarios):
 
 Open browser console:
+
 ```javascript
 // Inject a DNS event
-window.pushRiverEvent({ type: 'dns', strength: 1.5 })
+window.pushRiverEvent({ type: "dns", strength: 1.5 });
 
 // Inject TCP throughput (5 MB)
-window.pushTcpBytes(5_000_000)
+window.pushTcpBytes(5_000_000);
 
 // Check current TCP metrics
-window.riverDebug()
+window.riverDebug();
 ```
 
 **Python test scripts** (`scripts/`):
+
 - `udp_burst.py` - Generates UDP traffic for testing
 - `simulate-tcp.py` - (Present but not analyzed) Likely generates TCP traffic
 

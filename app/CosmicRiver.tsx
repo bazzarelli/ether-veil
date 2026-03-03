@@ -888,9 +888,7 @@ export default function CosmicRiver() {
 
       // Faster rise / slower fall makes spikes feel fluid instead of twitchy.
       const tau =
-        targetIntensity > smoothIntensity
-          ? c.riseTauSec
-          : c.fallTauSec;
+        targetIntensity > smoothIntensity ? c.riseTauSec : c.fallTauSec;
       const smoothingAlpha = 1 - Math.exp(-dt / Math.max(0.001, tau));
       const smoothedTarget =
         smoothIntensity + (targetIntensity - smoothIntensity) * smoothingAlpha;
@@ -917,9 +915,7 @@ export default function CosmicRiver() {
       const yPhaseSpd = c.yPhaseBase + intensity * c.yPhaseByIntensity;
       const cy =
         h * 0.5 +
-        h *
-          c.centerlineBobPct *
-          Math.sin(t * c.centerlineBobFreq + 1.3);
+        h * c.centerlineBobPct * Math.sin(t * c.centerlineBobFreq + 1.3);
 
       for (let li = 0; li < layers; li++) {
         const lf = li / layers;
@@ -1025,10 +1021,10 @@ export default function CosmicRiver() {
         Controls (C)
       </button>
       {controlsOpen ? (
-        <div className="absolute right-4 top-14 z-50 max-h-[80vh] w-[340px] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950/90 p-4 shadow-2xl backdrop-blur">
+        <div className="absolute right-4 top-14 z-50 max-h-[80vh] w-85 overflow-y-auto rounded-xl border border-slate-700 bg-slate-950/90 p-4 shadow-2xl backdrop-blur">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-100">
-              Cosmic River Controls
+              Vapor Controls
             </h3>
             <div className="flex items-center gap-2">
               <button
@@ -1039,22 +1035,22 @@ export default function CosmicRiver() {
                     ...PERFORMANCE_VISUAL_OVERRIDES,
                   }))
                 }
-                className="rounded border border-amber-500/60 px-2 py-1 text-[11px] text-amber-200"
+                className="rounded border border-slate-600 px-2 py-1 text-[11px] text-slate-200"
               >
-                Performance
+                Lean
               </button>
               <button
                 type="button"
                 onClick={() => setControls(() => DEFAULT_VISUAL_CONTROLS)}
                 className="rounded border border-slate-600 px-2 py-1 text-[11px] text-slate-200"
               >
-                Reset
+                Heavy
               </button>
             </div>
           </div>
-          <p className="mb-4 text-[11px] text-slate-400">
-            Press C to show/hide. Use this to tune smoothness, density, and
-            traffic mapping in real time. Settings are saved locally.
+          <p className="mb-4 text-[12px] text-slate-400">
+            Use this to tune smoothness, density, and traffic mapping in real
+            time.
           </p>
           <div className="space-y-4">
             <div className="space-y-2 rounded-lg border border-slate-800 p-3">
@@ -1068,7 +1064,9 @@ export default function CosmicRiver() {
                 max={300}
                 step={1}
                 format={(value) => `${value.toFixed(0)} MB/s`}
-                onChange={(value) => updateControl("tcpScaleBps", value * 1_000_000)}
+                onChange={(value) =>
+                  updateControl("tcpScaleBps", value * 1_000_000)
+                }
               />
               <SliderControl
                 label="Intensity Gain"
@@ -1177,7 +1175,9 @@ export default function CosmicRiver() {
                 max={12}
                 step={1}
                 format={(value) => `${value.toFixed(0)}`}
-                onChange={(value) => updateControl("minBlobs", Math.round(value))}
+                onChange={(value) =>
+                  updateControl("minBlobs", Math.round(value))
+                }
               />
               <SliderControl
                 label="Density Boost"
@@ -1247,7 +1247,9 @@ export default function CosmicRiver() {
                 min={0.1}
                 max={2.5}
                 step={0.01}
-                onChange={(value) => updateControl("textureMoteSpeedMul", value)}
+                onChange={(value) =>
+                  updateControl("textureMoteSpeedMul", value)
+                }
               />
               <SliderControl
                 label="Mote Size"
@@ -1263,7 +1265,9 @@ export default function CosmicRiver() {
                 min={0}
                 max={2}
                 step={0.01}
-                onChange={(value) => updateControl("textureMoteAlphaMul", value)}
+                onChange={(value) =>
+                  updateControl("textureMoteAlphaMul", value)
+                }
               />
             </div>
           </div>
