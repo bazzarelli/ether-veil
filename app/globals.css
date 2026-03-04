@@ -37,6 +37,7 @@ h2 {
 
 .planet-orb {
   position: absolute;
+  --orb-max-size: 25vh;
   --orb-x: -50%;
   --orb-y: -50%;
   border-radius: 9999px;
@@ -72,7 +73,7 @@ h2 {
   left: 50%;
   top: 0;
   --orb-y: -44%;
-  width: min(64vw, 860px);
+  width: min(64vw, var(--orb-max-size), 860px);
   aspect-ratio: 1;
   background: radial-gradient(
     circle at 36% 28%,
@@ -97,7 +98,7 @@ h2 {
 .planet-orb-bottom {
   left: 30%;
   top: 80%;
-  width: min(46vw, 620px);
+  width: min(46vw, var(--orb-max-size), 620px);
   aspect-ratio: 1;
   background: radial-gradient(
     circle at 34% 30%,
@@ -149,12 +150,12 @@ h2 {
 
 @media (max-width: 768px) {
   .planet-orb-top {
-    width: 90vw;
+    width: min(90vw, var(--orb-max-size));
     --orb-y: -48%;
   }
 
   .planet-orb-bottom {
-    width: 74vw;
+    width: min(74vw, var(--orb-max-size));
     left: 36%;
     top: 84%;
   }

@@ -227,6 +227,24 @@ const PERFORMANCE_VISUAL_OVERRIDES: Partial<VisualControls> = {
   textureMoteCount: 0,
 };
 
+const LEAN_VISUAL_CONTROLS: VisualControls = {
+  ...DEFAULT_VISUAL_CONTROLS,
+  ...PERFORMANCE_VISUAL_OVERRIDES,
+};
+
+type PresetMode = "lean" | "heavy";
+
+const controlsEqual = (a: VisualControls, b: VisualControls) =>
+  (Object.keys(DEFAULT_VISUAL_CONTROLS) as (keyof VisualControls)[]).every(
+    (key) => a[key] === b[key],
+  );
+
+const getPresetFromControls = (controls: VisualControls): PresetMode | null => {
+  if (controlsEqual(controls, LEAN_VISUAL_CONTROLS)) return "lean";
+  if (controlsEqual(controls, DEFAULT_VISUAL_CONTROLS)) return "heavy";
+  return null;
+};
+
 const VISUAL_CONTROLS_STORAGE_KEY = "cosmic-river-visual-controls-v1";
 
 const clamp = (value: number, min: number, max: number) =>
@@ -321,8 +339,9 @@ export default function CosmicRiver() {
   const vaporRef = useRef<HTMLCanvasElement | null>(null);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [visualControls, setVisualControls] = useState<VisualControls>(
-    DEFAULT_VISUAL_CONTROLS,
+    LEAN_VISUAL_CONTROLS,
   );
+  const [activePreset, setActivePreset] = useState<PresetMode | null>("lean");
   const controlsRef = useRef(visualControls);
 
   const setControls = (
@@ -340,8 +359,9 @@ export default function CosmicRiver() {
       const raw = localStorage.getItem(VISUAL_CONTROLS_STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<VisualControls>;
-      const merged = { ...DEFAULT_VISUAL_CONTROLS, ...parsed };
+      const merged = { ...LEAN_VISUAL_CONTROLS, ...parsed };
       setControls(() => merged);
+      setActivePreset(getPresetFromControls(merged));
     } catch {
       // ignore invalid persisted controls
     }
@@ -369,7 +389,22 @@ export default function CosmicRiver() {
     key: K,
     value: VisualControls[K],
   ) => {
+    setActivePreset(null);
     setControls((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateControlSet = (
+    updater: (current: VisualControls) => VisualControls,
+  ) => {
+    setActivePreset(null);
+    setControls(updater);
+  };
+
+  const applyPreset = (preset: PresetMode) => {
+    setActivePreset(preset);
+    setControls(() =>
+      preset === "lean" ? LEAN_VISUAL_CONTROLS : DEFAULT_VISUAL_CONTROLS,
+    );
   };
 
   useEffect(() => {
@@ -1029,20 +1064,23 @@ export default function CosmicRiver() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  setControls((current) => ({
-                    ...current,
-                    ...PERFORMANCE_VISUAL_OVERRIDES,
-                  }))
-                }
-                className="rounded border border-slate-600 px-2 py-1 text-[11px] text-slate-200"
+                onClick={() => applyPreset("lean")}
+                className={`rounded border px-2 py-1 text-[11px] ${
+                  activePreset === "lean"
+                    ? "border-teal-300 bg-teal-400/20 text-teal-100 shadow-[0_0_0_1px_rgba(45,212,191,0.35)]"
+                    : "border-slate-600 text-slate-200 hover:border-teal-400/50 hover:text-teal-100"
+                }`}
               >
                 Lean
               </button>
               <button
                 type="button"
-                onClick={() => setControls(() => DEFAULT_VISUAL_CONTROLS)}
-                className="rounded border border-slate-600 px-2 py-1 text-[11px] text-slate-200"
+                onClick={() => applyPreset("heavy")}
+                className={`rounded border px-2 py-1 text-[11px] ${
+                  activePreset === "heavy"
+                    ? "border-teal-300 bg-teal-400/20 text-teal-100 shadow-[0_0_0_1px_rgba(45,212,191,0.35)]"
+                    : "border-slate-600 text-slate-200 hover:border-teal-400/50 hover:text-teal-100"
+                }`}
               >
                 Heavy
               </button>
@@ -1083,7 +1121,7 @@ export default function CosmicRiver() {
                 max={1}
                 step={0.01}
                 onChange={(value) =>
-                  setControls((current) => ({
+                  updateControlSet((current) => ({
                     ...current,
                     intensityMin: value,
                     intensityMax: Math.max(current.intensityMax, value),
@@ -1097,7 +1135,7 @@ export default function CosmicRiver() {
                 max={1}
                 step={0.01}
                 onChange={(value) =>
-                  setControls((current) => ({
+                  updateControlSet((current) => ({
                     ...current,
                     intensityMax: value,
                     intensityMin: Math.min(current.intensityMin, value),
