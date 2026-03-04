@@ -60,7 +60,6 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-
 ## Troubleshooting
 
 ### tshark not found
@@ -88,7 +87,6 @@ Open [http://localhost:3000](http://localhost:3000).
 - `npm run lint` - lint codebase
 - `npm run river:interfaces` - list capture interfaces
 - `npm run river:bridge -- --iface <iface>` - start tshark bridge
-- `npm run river:test` - inject TCP byte traffic for testing
 
 ## Security and Ethics
 
