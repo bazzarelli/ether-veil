@@ -1,6 +1,6 @@
 # Ether Veil
 
-<img width="1784" height="1896" alt="Screenshot 2026-03-02 at 8 02 52 AM" src="https://github.com/user-attachments/assets/243d4ad0-e05c-42a5-9d32-81385ca501e5" />
+![screen-shot](https://github.com/user-attachments/assets/07befd83-e81c-48e6-bebc-8f74b4b498dd)
 
 Does looking at Wireshark logs repulse you? Wouldn't it be nice if you could see the log data at a glance in a beautiful visualization?
 
