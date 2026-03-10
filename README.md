@@ -1,4 +1,4 @@
-# Ether Veil (Artistic Wireshark visualization)
+# Ether Veil (Wireshark visualization)
 
 ![screen-shot](https://github.com/user-attachments/assets/07befd83-e81c-48e6-bebc-8f74b4b498dd)
 
