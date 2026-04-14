@@ -43,22 +43,24 @@ cd ether-veil
 powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 ```
 
-Then run in two terminals:
-
-Terminal 1 (bridge):
+Then start classroom sharing with one command:
 
 ```bash
 npm run river:interfaces
-npm run river:bridge -- --iface <your-interface>
+npm run dev:lan -- --iface <your-interface>
 ```
 
-Terminal 2 (frontend):
+The launcher will:
 
-```bash
-npm run dev
-```
+- detect the current LAN IPv4 address
+- set `NEXT_PUBLIC_RIVER_WS_URL` automatically unless you already provided one
+- start the WebSocket bridge on `0.0.0.0:8787`
+- start Next.js on `0.0.0.0:3000`
+- print the classroom URL to share
 
-Open [http://localhost:3000](http://localhost:3000).
+Open the printed LAN URL from your machine or another device on the same network.
+
+If you only want the frontend locally, `npm run dev` still works.
 
 ## Troubleshooting
 
@@ -78,10 +80,12 @@ Open [http://localhost:3000](http://localhost:3000).
 - Ensure bridge is running and listening on expected port.
 - Ensure `NEXT_PUBLIC_RIVER_WS_URL` matches host + port reachable by browser.
 - Restart frontend after env var changes.
+- Allow inbound firewall access for TCP ports `3000` and `8787` on the host machine when sharing with classmates.
 
 ## Scripts
 
 - `npm run dev` - start Next.js dev server
+- `npm run dev:lan -- --iface <iface>` - detect LAN IP, start bridge + Next.js for classroom sharing
 - `npm run build` - production build
 - `npm run start` - run production server
 - `npm run lint` - lint codebase

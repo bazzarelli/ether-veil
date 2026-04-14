@@ -820,7 +820,18 @@ export default function CosmicRiver() {
       instance = new p5Module.default(sketch, containerRef.current);
 
       const wsUrl =
-        process.env.NEXT_PUBLIC_RIVER_WS_URL ?? "ws://localhost:8787";
+        process.env.NEXT_PUBLIC_RIVER_WS_URL ??
+        (() => {
+          const hostname = window.location.hostname;
+          const host =
+            hostname &&
+            hostname !== "localhost" &&
+            hostname !== "127.0.0.1" &&
+            hostname !== "::1"
+              ? hostname
+              : "localhost";
+          return `ws://${host}:8787`;
+        })();
       socket = new WebSocket(wsUrl);
       socket.addEventListener("message", (event) => {
         try {
@@ -837,7 +848,7 @@ export default function CosmicRiver() {
           if (typeof payload?.tcpBytes === "number") {
             tcpTracker.addBytes(payload.tcpBytes);
           }
-        } catch (err) {
+        } catch {
           // ignore malformed events
         }
       });

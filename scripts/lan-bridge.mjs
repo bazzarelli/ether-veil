@@ -11,6 +11,7 @@ const tsharkPath =
   process.env.TSHARK_PATH ??
   "/Applications/Wireshark.app/Contents/MacOS/tshark";
 const wsPort = Number(process.env.RIVER_WS_PORT ?? 8787);
+const wsHost = process.env.RIVER_WS_HOST ?? "localhost";
 
 const ensureTshark = () => {
   if (!tsharkPath) {
@@ -29,7 +30,7 @@ if (listOnly) {
 } else {
   ensureTshark();
 
-  const wss = new WebSocketServer({ port: wsPort });
+  const wss = new WebSocketServer({ host: wsHost, port: wsPort });
   const clients = new Set();
   wss.on("connection", (socket) => {
     clients.add(socket);
@@ -212,7 +213,7 @@ if (listOnly) {
         if (shouldSend(type)) {
           sendEvent({ type, strength, protocol: protoCol, src });
         }
-      } catch (err) {
+      } catch {
         // Ignore parse errors from partial JSON lines.
       }
     }
@@ -227,7 +228,7 @@ if (listOnly) {
     process.exit(code ?? 0);
   });
 
-  console.log(`River bridge listening on ws://localhost:${wsPort}`);
+  console.log(`River bridge listening on ws://${wsHost}:${wsPort}`);
   console.log(`Using tshark at ${tsharkPath}`);
   if (!iface) {
     console.log("No interface specified. Use --iface <name> after listing interfaces.");
