@@ -12,6 +12,12 @@ const tsharkPath =
   "/Applications/Wireshark.app/Contents/MacOS/tshark";
 const wsPort = Number(process.env.RIVER_WS_PORT ?? 8787);
 const wsHost = process.env.RIVER_WS_HOST ?? "localhost";
+const highTrafficMode = process.env.RIVER_HIGH_TRAFFIC_MODE === "true";
+const snaplen = Number(
+  process.env.RIVER_SNAPLEN ?? (highTrafficMode ? 128 : 0),
+);
+const captureFilter = process.env.RIVER_CAPTURE_FILTER?.trim();
+const promiscuousMode = process.env.RIVER_PROMISCUOUS !== "false";
 
 const ensureTshark = () => {
   if (!tsharkPath) {
@@ -83,16 +89,24 @@ if (listOnly) {
   // to all clients at a fixed interval. This decouples the byte-rate signal
   // from the per-packet event rate limiter so the vapor shader always gets
   // accurate throughput data regardless of RIVER_RATE_MS throttling.
-  const TCP_FLUSH_MS = Number(process.env.RIVER_TCP_FLUSH_MS ?? 200);
+  const TRAFFIC_FLUSH_MS = Number(process.env.RIVER_TRAFFIC_FLUSH_MS ?? 200);
   let tcpByteAccumulator = 0;
+  let trafficByteAccumulator = 0;
 
-  const flushTcpBytes = () => {
-    if (tcpByteAccumulator > 0 && clients.size > 0) {
+  const flushTrafficBytes = () => {
+    if (!clients.size) return;
+
+    if (tcpByteAccumulator > 0) {
       sendEvent({ tcpBytes: tcpByteAccumulator });
       tcpByteAccumulator = 0;
     }
+
+    if (trafficByteAccumulator > 0) {
+      sendEvent({ trafficBytes: trafficByteAccumulator });
+      trafficByteAccumulator = 0;
+    }
   };
-  setInterval(flushTcpBytes, TCP_FLUSH_MS);
+  setInterval(flushTrafficBytes, TRAFFIC_FLUSH_MS);
 
   const tsharkArgs = [
     "-l",
@@ -122,6 +136,18 @@ if (listOnly) {
     "-e",
     "_ws.col.Protocol",
   ];
+
+  if (snaplen > 0) {
+    tsharkArgs.push("-s", String(snaplen));
+  }
+
+  if (!promiscuousMode) {
+    tsharkArgs.push("-p");
+  }
+
+  if (captureFilter) {
+    tsharkArgs.push("-f", captureFilter);
+  }
 
   if (iface) {
     tsharkArgs.push("-i", iface);
@@ -206,6 +232,10 @@ if (listOnly) {
         // ── Accumulate TCP bytes for the vapor wave ─────────────────────────
         // Count any frame that travels over TCP (including TLS, HTTP/2, etc.)
         // regardless of whether it also fired a visual event above.
+        if (frameLen > 0) {
+          trafficByteAccumulator += frameLen;
+        }
+
         if (tcpPort && frameLen > 0) {
           tcpByteAccumulator += frameLen;
         }
@@ -230,6 +260,14 @@ if (listOnly) {
 
   console.log(`River bridge listening on ws://${wsHost}:${wsPort}`);
   console.log(`Using tshark at ${tsharkPath}`);
+  console.log(
+    `Capture mode: ${highTrafficMode ? "high-traffic" : "default"} | ` +
+      `snaplen=${snaplen > 0 ? snaplen : "full"} | ` +
+      `promiscuous=${promiscuousMode ? "on" : "off"}`,
+  );
+  if (captureFilter) {
+    console.log(`Capture filter: ${captureFilter}`);
+  }
   if (!iface) {
     console.log("No interface specified. Use --iface <name> after listing interfaces.");
   }

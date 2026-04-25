@@ -29,7 +29,11 @@ type RiverEventInput =
     }
   | string;
 
-const MAX_PULSES = 8;
+const LIVE_FIDELITY_MODE =
+  process.env.NEXT_PUBLIC_LIVE_FIDELITY_MODE === "true";
+const MAX_PULSES = LIVE_FIDELITY_MODE ? 14 : 8;
+const MAX_SYMBOLS = LIVE_FIDELITY_MODE ? 80 : 24;
+const SYMBOL_LIFETIME_SEC = LIVE_FIDELITY_MODE ? 10 : 20;
 const EVENT_TYPES: Record<string, number> = {
   tcp: 0,
   udp: 1,
@@ -250,6 +254,18 @@ const VISUAL_CONTROLS_STORAGE_KEY = "cosmic-river-visual-controls-v1";
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
+declare global {
+  interface Window {
+    pushTcpBytes?: (bytes: number) => void;
+    pushRiverEvent?: (input: RiverEventInput) => void;
+    riverDebug?: () => void;
+    riverCounts?: Record<string, number>;
+    __tcpIntensity?: number;
+    __trafficIntensity?: number;
+    __trafficBytesPerSecond?: number;
+  }
+}
+
 type SliderControlProps = {
   label: string;
   value: number;
@@ -333,6 +349,8 @@ class TcpRateTracker {
     return Math.min(1, raw);
   }
 }
+
+const TRAFFIC_SCALE_BPS = 140_000_000; // 140 MB/s overall mirrored traffic → intensity 1.0
 
 export default function CosmicRiver() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -424,20 +442,17 @@ export default function CosmicRiver() {
       let nextRippleAt = performance.now() + 60000;
 
       const tcpTracker = new TcpRateTracker();
+      const trafficTracker = new TcpRateTracker();
 
       // ── public API ──────────────────────────────────────────────────────────
       // Called by tshark bridge: pass raw byte count of each captured TCP segment
-      (
-        window as Window & {
-          pushTcpBytes?: (bytes: number) => void;
-        }
-      ).pushTcpBytes = (bytes: number) => {
+      window.pushTcpBytes = (bytes: number) => {
         tcpTracker.addBytes(bytes);
       };
 
       // Debug helper — open browser console and call: riverDebug()
       // Shows live TCP intensity so you can confirm data is flowing.
-      (window as Window & { riverDebug?: () => void }).riverDebug = () => {
+      window.riverDebug = () => {
         const c = controlsRef.current;
         const bps = tcpTracker.getBytesPerSecond();
         const intensity = clamp(
@@ -503,18 +518,18 @@ export default function CosmicRiver() {
           x: (Math.random() - 0.5) * 0.9,
           y: (Math.random() - 0.5) * 0.45,
           spin: (Math.random() - 0.5) * 0.8,
-          size: 10 + Math.random() * 16,
-          drift: 0.012 + Math.random() * 0.02,
+          size: LIVE_FIDELITY_MODE
+            ? 6 + Math.random() * 10
+            : 10 + Math.random() * 16,
+          drift: LIVE_FIDELITY_MODE
+            ? 0.02 + Math.random() * 0.028
+            : 0.012 + Math.random() * 0.02,
         });
-        symbols = symbols.slice(0, 24);
+        symbols = symbols.slice(0, MAX_SYMBOLS);
         lastActivity = now;
       };
 
-      (
-        window as Window & {
-          pushRiverEvent?: (input: RiverEventInput) => void;
-        }
-      ).pushRiverEvent = addPulse;
+      window.pushRiverEvent = addPulse;
 
       const sketch = (p: p5) => {
         const particles: {
@@ -637,13 +652,11 @@ export default function CosmicRiver() {
             idleSeconds < 10 ? 1 : Math.max(0.5, 1 - (idleSeconds - 10) / 8);
 
           pulses = pulses.filter((pulse) => now / 1000 - pulse.time < 10);
-          symbols = symbols.filter((symbol) => now / 1000 - symbol.born < 20);
+          symbols = symbols.filter(
+            (symbol) => now / 1000 - symbol.born < SYMBOL_LIFETIME_SEC,
+          );
 
-          (
-            window as Window & {
-              riverCounts?: Record<string, number>;
-            }
-          ).riverCounts = {
+          window.riverCounts = {
             dns: symbols.filter((s) => s.type === EVENT_TYPES.dns).length,
             tcp: symbols.filter((s) => s.type === EVENT_TYPES.tcp).length,
             udp: symbols.filter((s) => s.type === EVENT_TYPES.udp).length,
@@ -657,12 +670,17 @@ export default function CosmicRiver() {
 
           // Publish TCP intensity for vapor wave visualization
           const c = controlsRef.current;
-          (window as Window & { __tcpIntensity?: number }).__tcpIntensity =
-            clamp(
-              tcpTracker.getIntensity(c.tcpScaleBps) * c.intensityGain,
-              c.intensityMin,
-              c.intensityMax,
-            );
+          window.__tcpIntensity = clamp(
+            tcpTracker.getIntensity(c.tcpScaleBps) * c.intensityGain,
+            c.intensityMin,
+            c.intensityMax,
+          );
+          window.__trafficBytesPerSecond = trafficTracker.getBytesPerSecond();
+          window.__trafficIntensity = clamp(
+            trafficTracker.getIntensity(TRAFFIC_SCALE_BPS),
+            0,
+            1,
+          );
 
           if (now > nextRippleAt) {
             addPulse({ type: "udp", strength: 0.6 });
@@ -703,7 +721,7 @@ export default function CosmicRiver() {
           symbols.forEach((symbol) => {
             const age = now / 1000 - symbol.born;
             const fadeIn = p.constrain(age / 2.4, 0, 1);
-            const fadeOut = p.constrain(1 - age / 20, 0, 1);
+            const fadeOut = p.constrain(1 - age / SYMBOL_LIFETIME_SEC, 0, 1);
             const fade = Math.pow(fadeIn * fadeOut, 1.1);
             const pulse = 1 + 0.15 * Math.sin(age * 3 + symbol.type);
             const isAlertSymbol =
@@ -847,6 +865,9 @@ export default function CosmicRiver() {
           //   { "tcpBytes": 65536 }
           if (typeof payload?.tcpBytes === "number") {
             tcpTracker.addBytes(payload.tcpBytes);
+          }
+          if (typeof payload?.trafficBytes === "number") {
+            trafficTracker.addBytes(payload.trafficBytes);
           }
         } catch {
           // ignore malformed events

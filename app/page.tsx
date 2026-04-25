@@ -1,6 +1,10 @@
 import EventLegend from "./EventLegend";
 import CosmicRiver from "./CosmicRiver";
 import FullscreenButton from "./FullscreenButton";
+import ActivityMeter from "./ActivityMeter";
+
+const ENABLE_ACTIVITY_METER =
+  process.env.NEXT_PUBLIC_ENABLE_ACTIVITY_METER !== "false";
 
 export default function Home() {
   return (
@@ -8,6 +12,8 @@ export default function Home() {
       <div className="absolute inset-0">
         <CosmicRiver />
       </div>
+
+      {ENABLE_ACTIVITY_METER ? <ActivityMeter /> : null}
 
       <div className="relative z-10 flex min-h-screen flex-col justify-between px-8 py-10 text-slate-100">
         <div className="absolute right-8 top-10 z-20">

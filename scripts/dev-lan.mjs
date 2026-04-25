@@ -43,11 +43,14 @@ const detectLanIpv4 = () => {
 const lanHost = detectLanIpv4();
 const nextPublicRiverWsUrl =
   process.env.NEXT_PUBLIC_RIVER_WS_URL ?? `ws://${lanHost}:8787`;
+const liveFidelityMode = process.env.NEXT_PUBLIC_LIVE_FIDELITY_MODE === "true";
 
 const sharedEnv = {
   ...process.env,
   NEXT_PUBLIC_RIVER_WS_URL: nextPublicRiverWsUrl,
   RIVER_WS_HOST: "0.0.0.0",
+  RIVER_RATE_MS:
+    process.env.RIVER_RATE_MS ?? (liveFidelityMode ? "8" : process.env.RIVER_RATE_MS),
 };
 
 const bridgeArgs = [
@@ -121,6 +124,11 @@ console.log(
   `here is the address to share with the classroom: http://${lanHost}:3000`,
 );
 console.log(`live data websocket: ${nextPublicRiverWsUrl}`);
+if (liveFidelityMode) {
+  console.log(
+    `live fidelity mode enabled: denser glyphs with bridge rate ${sharedEnv.RIVER_RATE_MS}ms`,
+  );
+}
 
 spawnChild("bridge", process.execPath, bridgeArgs, sharedEnv);
 spawnChild(
