@@ -181,27 +181,6 @@ h2 {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-}
-
-.activity-meter__scale {
-  position: relative;
-  width: 14px;
-  height: 410px;
-}
-
-.activity-meter__tick {
-  position: absolute;
-  right: 0;
-  width: 12px;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(178, 219, 255, 0.2), rgba(178, 219, 255, 0.88));
-  box-shadow: 0 0 14px rgba(110, 211, 255, 0.22);
-}
-
-.activity-meter__tick:nth-child(odd) {
-  width: 8px;
-  opacity: 0.72;
 }
 
 .activity-meter__track {
@@ -292,10 +271,6 @@ h2 {
 @media (max-width: 768px) {
   .activity-meter {
     gap: 0.7rem;
-  }
-
-  .activity-meter__scale {
-    height: 310px;
   }
 
   .activity-meter__track {

@@ -4,6 +4,8 @@ import { WebSocketServer } from "ws";
 
 const args = process.argv.slice(2);
 const listOnly = args.includes("--list") || args.includes("-l");
+const mirrorMode =
+  args.includes("--mirror") || process.env.RIVER_MIRROR_MODE === "true";
 const ifaceArgIndex = args.findIndex((arg) => arg === "--iface" || arg === "-i");
 const iface = ifaceArgIndex >= 0 ? args[ifaceArgIndex + 1] : undefined;
 
@@ -12,12 +14,18 @@ const tsharkPath =
   "/Applications/Wireshark.app/Contents/MacOS/tshark";
 const wsPort = Number(process.env.RIVER_WS_PORT ?? 8787);
 const wsHost = process.env.RIVER_WS_HOST ?? "localhost";
-const highTrafficMode = process.env.RIVER_HIGH_TRAFFIC_MODE === "true";
+const highTrafficMode =
+  mirrorMode || process.env.RIVER_HIGH_TRAFFIC_MODE === "true";
 const snaplen = Number(
   process.env.RIVER_SNAPLEN ?? (highTrafficMode ? 128 : 0),
 );
-const captureFilter = process.env.RIVER_CAPTURE_FILTER?.trim();
-const promiscuousMode = process.env.RIVER_PROMISCUOUS !== "false";
+const captureFilter =
+  process.env.RIVER_CAPTURE_FILTER?.trim() ||
+  (mirrorMode ? "tcp or udp or arp or icmp" : undefined);
+const promiscuousMode = mirrorMode
+  ? true
+  : process.env.RIVER_PROMISCUOUS !== "false";
+const mirrorStatsMs = Number(process.env.RIVER_MIRROR_STATS_MS ?? 5000);
 
 const ensureTshark = () => {
   if (!tsharkPath) {
@@ -92,9 +100,53 @@ if (listOnly) {
   const TRAFFIC_FLUSH_MS = Number(process.env.RIVER_TRAFFIC_FLUSH_MS ?? 200);
   let tcpByteAccumulator = 0;
   let trafficByteAccumulator = 0;
+  const eventCountAccumulator = new Map();
+  let mirrorStats = {
+    frames: 0,
+    bytes: 0,
+    sentEvents: 0,
+    counts: new Map(),
+  };
+
+  const recordEventCount = (type) => {
+    eventCountAccumulator.set(type, (eventCountAccumulator.get(type) ?? 0) + 1);
+  };
+
+  const recordMirrorStats = (type, frameLen) => {
+    if (!mirrorMode) return;
+    mirrorStats.frames += 1;
+    mirrorStats.bytes += frameLen;
+    mirrorStats.counts.set(type, (mirrorStats.counts.get(type) ?? 0) + 1);
+  };
+
+  const formatCounts = (counts) =>
+    [...counts.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([type, count]) => `${type}:${count}`)
+      .join(" ");
+
+  if (mirrorMode) {
+    setInterval(() => {
+      const mbps = mirrorStats.bytes / Math.max(mirrorStatsMs / 1000, 1) / 1_000_000;
+      console.log(
+        `[mirror] ${mirrorStats.frames} frames | ${mbps.toFixed(2)} MB/s | ` +
+          `${mirrorStats.sentEvents} visual events | clients=${clients.size}` +
+          `${mirrorStats.counts.size ? ` | ${formatCounts(mirrorStats.counts)}` : ""}`,
+      );
+      mirrorStats = {
+        frames: 0,
+        bytes: 0,
+        sentEvents: 0,
+        counts: new Map(),
+      };
+    }, mirrorStatsMs);
+  }
 
   const flushTrafficBytes = () => {
-    if (!clients.size) return;
+    if (!clients.size) {
+      eventCountAccumulator.clear();
+      return;
+    }
 
     if (tcpByteAccumulator > 0) {
       sendEvent({ tcpBytes: tcpByteAccumulator });
@@ -104,6 +156,11 @@ if (listOnly) {
     if (trafficByteAccumulator > 0) {
       sendEvent({ trafficBytes: trafficByteAccumulator });
       trafficByteAccumulator = 0;
+    }
+
+    if (eventCountAccumulator.size > 0) {
+      sendEvent({ eventCounts: Object.fromEntries(eventCountAccumulator) });
+      eventCountAccumulator.clear();
     }
   };
   setInterval(flushTrafficBytes, TRAFFIC_FLUSH_MS);
@@ -165,7 +222,8 @@ if (listOnly) {
       if (!line) continue;
       try {
         const payload = JSON.parse(line);
-        const layers = payload?.layers ?? {};
+        const layers = payload?.layers;
+        if (!layers) continue;
         const getLayer = (keys) => {
           for (const key of keys) {
             const value = layers[key];
@@ -229,6 +287,9 @@ if (listOnly) {
           strength = Math.max(strength, 1.2);
         }
 
+        recordEventCount(type);
+        recordMirrorStats(type, frameLen);
+
         // ── Accumulate TCP bytes for the vapor wave ─────────────────────────
         // Count any frame that travels over TCP (including TLS, HTTP/2, etc.)
         // regardless of whether it also fired a visual event above.
@@ -241,7 +302,8 @@ if (listOnly) {
         }
 
         if (shouldSend(type)) {
-          sendEvent({ type, strength, protocol: protoCol, src });
+          mirrorStats.sentEvents += mirrorMode ? 1 : 0;
+          sendEvent({ type, strength, protocol: protoCol, src, counted: true });
         }
       } catch {
         // Ignore parse errors from partial JSON lines.
@@ -261,10 +323,16 @@ if (listOnly) {
   console.log(`River bridge listening on ws://${wsHost}:${wsPort}`);
   console.log(`Using tshark at ${tsharkPath}`);
   console.log(
-    `Capture mode: ${highTrafficMode ? "high-traffic" : "default"} | ` +
+    `Capture mode: ${mirrorMode ? "mirror" : highTrafficMode ? "high-traffic" : "default"} | ` +
       `snaplen=${snaplen > 0 ? snaplen : "full"} | ` +
       `promiscuous=${promiscuousMode ? "on" : "off"}`,
   );
+  if (mirrorMode) {
+    console.log(
+      `Mirror mode: enabled on ${iface ?? "unspecified interface"}; ` +
+        `stats every ${mirrorStatsMs}ms before frontend throttling.`,
+    );
+  }
   if (captureFilter) {
     console.log(`Capture filter: ${captureFilter}`);
   }

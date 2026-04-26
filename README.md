@@ -2,11 +2,11 @@
 
 ![screen-shot](https://github.com/user-attachments/assets/dec504c0-20f1-4e2f-96fb-b9adcdab5c69)
 
-Does looking at Wireshark logs repulse you? Wouldn't it be nice if you could see the log data at a glance in a beautiful visualization?
+A beautiful and educational alternative to the wall of log messages that is the typical Wireshark experience.
 
 Real-time, art-forward network activity visualization built with Next.js and p5.js.
 
-The app renders ambient particles, protocol symbols (TCP/UDP/DNS/Portscan/Malformed/Hierarchy), and a TCP-intensity vapor field from live packet events.
+The app renders ambient particles, protocol symbols (TCP/UDP/DNS/Portscan/Malformed/Hierarchy), and a TCP-intensity vapor field from live packet events. Also a density meter for aggregate network activity is available.
 
 ## Open Source Status
 
@@ -141,27 +141,43 @@ npm run river:interfaces
 
 2. Choose the NIC connected to the mirrored traffic.
 
-3. Start the app in high-traffic capture mode:
+3. Start the app in explicit mirror mode:
 
 ```bash
-RIVER_HIGH_TRAFFIC_MODE=true \
-RIVER_SNAPLEN=128 \
-RIVER_CAPTURE_FILTER="tcp or udp or arp or icmp" \
-npm run dev:lan -- --iface <your-interface>
+npm run dev:lan -- --mirror --iface <your-interface>
 ```
 
-4. Keep promiscuous mode on unless you intentionally want it off. If you really need to disable it:
+This is the intended mode for Palo Alto, SPAN, or other port-mirror feeds where mirrored traffic is already being delivered to your capture NIC.
+
+Mirror mode:
+
+- enables high-traffic capture defaults
+- uses `RIVER_SNAPLEN=128` unless you override it
+- uses `RIVER_CAPTURE_FILTER="tcp or udp or arp or icmp"` unless you override it
+- forces promiscuous mode on
+- prints rolling `[mirror]` stats every 5 seconds before frontend throttling
+
+Example stats line:
+
+```text
+[mirror] 4217 frames | 8.42 MB/s | 34 visual events | clients=1 | dns:22 tcp:3890 udp:305
+```
+
+If the Palo Alto mirror is sending traffic to your NIC, these frame and MB/s values should rise even if the browser glyphs are capped.
+
+4. You can still tune mirror mode with env vars:
 
 ```bash
-RIVER_HIGH_TRAFFIC_MODE=true \
-RIVER_PROMISCUOUS=false \
-npm run dev:lan -- --iface <your-interface>
+RIVER_SNAPLEN=256 \
+RIVER_CAPTURE_FILTER="tcp or udp or arp or icmp or icmp6" \
+RIVER_MIRROR_STATS_MS=2000 \
+npm run dev:lan -- --mirror --iface <your-interface>
 ```
 
 What this does:
 
 - reduces capture overhead by limiting snap length
-- optionally drops unwanted traffic before tshark parses it
+- drops unwanted traffic before tshark parses it
 - does not change frontend visuals by itself
 
 ### Mode 4: Local Demo / Meter Testing Mode
@@ -266,6 +282,8 @@ Use `RIVER_*` or `TSHARK_*` for packet capture and bridge behavior:
 - `TSHARK_PATH` - tshark binary path
 - `RIVER_RATE_MS` - per-event glyph throttle
 - `RIVER_TRAFFIC_FLUSH_MS` - byte aggregation flush interval
+- `RIVER_MIRROR_MODE` - explicit SPAN / port-mirror capture mode
+- `RIVER_MIRROR_STATS_MS` - interval for mirror-mode capture stats
 - `RIVER_HIGH_TRAFFIC_MODE` - mirrored-network CPU-friendly capture mode
 - `RIVER_SNAPLEN` - snap length for header-only capture
 - `RIVER_CAPTURE_FILTER` - BPF capture filter

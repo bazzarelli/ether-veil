@@ -39,7 +39,6 @@ export default function ActivityMeter() {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  const tickCount = 9;
   const fillHeight = `${Math.max(intensity * 100, 2)}%`;
 
   return (
@@ -48,18 +47,6 @@ export default function ActivityMeter() {
       className="activity-meter pointer-events-none absolute left-4 top-1/2 z-30 -translate-y-1/2 select-none md:left-6"
     >
       <div className="activity-meter__rail">
-        <div className="activity-meter__scale" aria-hidden="true">
-          {Array.from({ length: tickCount }).map((_, index) => (
-            <span
-              key={index}
-              className="activity-meter__tick"
-              style={{
-                bottom: `${(index / (tickCount - 1)) * 100}%`,
-              }}
-            />
-          ))}
-        </div>
-
         <div className="activity-meter__track">
           <div className="activity-meter__well" aria-hidden="true">
             <div

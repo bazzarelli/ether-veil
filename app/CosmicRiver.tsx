@@ -21,19 +21,42 @@ type SymbolEvent = {
   drift: number;
 };
 
+type RecentSymbolEvent = {
+  born: number;
+  type: number;
+  count: number;
+};
+
 type RiverEventInput =
   | {
       type?: string;
       strength?: number;
       bytes?: number;
+      counted?: boolean;
     }
   | string;
 
-const LIVE_FIDELITY_MODE =
-  process.env.NEXT_PUBLIC_LIVE_FIDELITY_MODE === "true";
-const MAX_PULSES = LIVE_FIDELITY_MODE ? 14 : 8;
-const MAX_SYMBOLS = LIVE_FIDELITY_MODE ? 80 : 24;
-const SYMBOL_LIFETIME_SEC = LIVE_FIDELITY_MODE ? 10 : 20;
+const INITIAL_FIDELITY_MODE = false;
+const SYMBOL_RENDERING_MODES = {
+  performance: {
+    maxPulses: 8,
+    maxSymbols: 24,
+    symbolLifetimeSec: 20,
+    sizeMin: 10,
+    sizeRange: 16,
+    driftMin: 0.012,
+    driftRange: 0.02,
+  },
+  fidelity: {
+    maxPulses: 14,
+    maxSymbols: 80,
+    symbolLifetimeSec: 10,
+    sizeMin: 6,
+    sizeRange: 10,
+    driftMin: 0.02,
+    driftRange: 0.028,
+  },
+};
 const EVENT_TYPES: Record<string, number> = {
   tcp: 0,
   udp: 1,
@@ -228,7 +251,7 @@ const PERFORMANCE_VISUAL_OVERRIDES: Partial<VisualControls> = {
   scrollByIntensity: 0.08,
   blobYJitterScale: 0.35,
   enableTextureMotes: false,
-  textureMoteCount: 0,
+  textureMoteCount: 60,
 };
 
 const LEAN_VISUAL_CONTROLS: VisualControls = {
@@ -236,20 +259,18 @@ const LEAN_VISUAL_CONTROLS: VisualControls = {
   ...PERFORMANCE_VISUAL_OVERRIDES,
 };
 
-type PresetMode = "lean" | "heavy";
-
-const controlsEqual = (a: VisualControls, b: VisualControls) =>
-  (Object.keys(DEFAULT_VISUAL_CONTROLS) as (keyof VisualControls)[]).every(
-    (key) => a[key] === b[key],
-  );
-
-const getPresetFromControls = (controls: VisualControls): PresetMode | null => {
-  if (controlsEqual(controls, LEAN_VISUAL_CONTROLS)) return "lean";
-  if (controlsEqual(controls, DEFAULT_VISUAL_CONTROLS)) return "heavy";
-  return null;
+const FIDELITY_VISUAL_CONTROLS: VisualControls = {
+  ...DEFAULT_VISUAL_CONTROLS,
+  layers: 4,
+  maxBlobBoost: 6,
+  spreadByIntensity: 0.32,
+  blobYJitterScale: 0.45,
+  enableTextureMotes: true,
+  textureMoteCount: 180,
 };
 
-const VISUAL_CONTROLS_STORAGE_KEY = "cosmic-river-visual-controls-v1";
+const VISUAL_CONTROLS_STORAGE_KEY = "cosmic-river-visual-controls-v2";
+const FIDELITY_MODE_STORAGE_KEY = "cosmic-river-fidelity-mode-v1";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
@@ -259,7 +280,7 @@ declare global {
     pushTcpBytes?: (bytes: number) => void;
     pushRiverEvent?: (input: RiverEventInput) => void;
     riverDebug?: () => void;
-    riverCounts?: Record<string, number>;
+    riverCounts?: Record<string, { visible: number; total: number }>;
     __tcpIntensity?: number;
     __trafficIntensity?: number;
     __trafficBytesPerSecond?: number;
@@ -356,11 +377,14 @@ export default function CosmicRiver() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const vaporRef = useRef<HTMLCanvasElement | null>(null);
   const [controlsOpen, setControlsOpen] = useState(false);
-  const [visualControls, setVisualControls] = useState<VisualControls>(
-    LEAN_VISUAL_CONTROLS,
+  const [fidelityMode, setFidelityMode] = useState(
+    INITIAL_FIDELITY_MODE,
   );
-  const [activePreset, setActivePreset] = useState<PresetMode | null>("lean");
+  const [visualControls, setVisualControls] = useState<VisualControls>(
+    INITIAL_FIDELITY_MODE ? FIDELITY_VISUAL_CONTROLS : LEAN_VISUAL_CONTROLS,
+  );
   const controlsRef = useRef(visualControls);
+  const fidelityModeRef = useRef(fidelityMode);
 
   const setControls = (
     updater: (current: VisualControls) => VisualControls,
@@ -374,12 +398,29 @@ export default function CosmicRiver() {
 
   useEffect(() => {
     try {
+      let nextFidelityMode = INITIAL_FIDELITY_MODE;
+      const rawFidelityMode = localStorage.getItem(
+        FIDELITY_MODE_STORAGE_KEY,
+      );
+      if (rawFidelityMode) {
+        nextFidelityMode = JSON.parse(rawFidelityMode) === true;
+      }
+      fidelityModeRef.current = nextFidelityMode;
+      setFidelityMode(nextFidelityMode);
+
       const raw = localStorage.getItem(VISUAL_CONTROLS_STORAGE_KEY);
-      if (!raw) return;
+      if (!raw) {
+        setControls(() =>
+          nextFidelityMode ? FIDELITY_VISUAL_CONTROLS : LEAN_VISUAL_CONTROLS,
+        );
+        return;
+      }
       const parsed = JSON.parse(raw) as Partial<VisualControls>;
-      const merged = { ...LEAN_VISUAL_CONTROLS, ...parsed };
+      const merged = {
+        ...(nextFidelityMode ? FIDELITY_VISUAL_CONTROLS : LEAN_VISUAL_CONTROLS),
+        ...parsed,
+      };
       setControls(() => merged);
-      setActivePreset(getPresetFromControls(merged));
     } catch {
       // ignore invalid persisted controls
     }
@@ -391,6 +432,13 @@ export default function CosmicRiver() {
       JSON.stringify(visualControls),
     );
   }, [visualControls]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      FIDELITY_MODE_STORAGE_KEY,
+      JSON.stringify(fidelityMode),
+    );
+  }, [fidelityMode]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -407,21 +455,20 @@ export default function CosmicRiver() {
     key: K,
     value: VisualControls[K],
   ) => {
-    setActivePreset(null);
     setControls((current) => ({ ...current, [key]: value }));
   };
 
   const updateControlSet = (
     updater: (current: VisualControls) => VisualControls,
   ) => {
-    setActivePreset(null);
     setControls(updater);
   };
 
-  const applyPreset = (preset: PresetMode) => {
-    setActivePreset(preset);
+  const setFidelityEnabled = (enabled: boolean) => {
+    fidelityModeRef.current = enabled;
+    setFidelityMode(enabled);
     setControls(() =>
-      preset === "lean" ? LEAN_VISUAL_CONTROLS : DEFAULT_VISUAL_CONTROLS,
+      enabled ? FIDELITY_VISUAL_CONTROLS : LEAN_VISUAL_CONTROLS,
     );
   };
 
@@ -438,6 +485,7 @@ export default function CosmicRiver() {
 
       let pulses: Pulse[] = [];
       let symbols: SymbolEvent[] = [];
+      let recentSymbolEvents: RecentSymbolEvent[] = [];
       let lastActivity = performance.now();
       let nextRippleAt = performance.now() + 60000;
 
@@ -495,6 +543,9 @@ export default function CosmicRiver() {
         const typeKey = (payload.type ?? "tcp").toLowerCase();
         const type = EVENT_TYPES[typeKey] ?? 0;
         const strength = Math.max(0.2, Math.min(payload.strength ?? 1, 2));
+        const renderingMode = fidelityModeRef.current
+          ? SYMBOL_RENDERING_MODES.fidelity
+          : SYMBOL_RENDERING_MODES.performance;
 
         // If the event carries byte info, feed the TCP tracker
         if (
@@ -510,7 +561,14 @@ export default function CosmicRiver() {
           strength,
           seed: Math.random() * 10,
         });
-        pulses = pulses.slice(0, MAX_PULSES);
+        pulses = pulses.slice(0, renderingMode.maxPulses);
+        if (!payload.counted) {
+          recentSymbolEvents.unshift({
+            born: now / 1000,
+            type,
+            count: 1,
+          });
+        }
         symbols.unshift({
           born: now / 1000,
           type,
@@ -518,14 +576,11 @@ export default function CosmicRiver() {
           x: (Math.random() - 0.5) * 0.9,
           y: (Math.random() - 0.5) * 0.45,
           spin: (Math.random() - 0.5) * 0.8,
-          size: LIVE_FIDELITY_MODE
-            ? 6 + Math.random() * 10
-            : 10 + Math.random() * 16,
-          drift: LIVE_FIDELITY_MODE
-            ? 0.02 + Math.random() * 0.028
-            : 0.012 + Math.random() * 0.02,
+          size: renderingMode.sizeMin + Math.random() * renderingMode.sizeRange,
+          drift:
+            renderingMode.driftMin + Math.random() * renderingMode.driftRange,
         });
-        symbols = symbols.slice(0, MAX_SYMBOLS);
+        symbols = symbols.slice(0, renderingMode.maxSymbols);
         lastActivity = now;
       };
 
@@ -650,22 +705,55 @@ export default function CosmicRiver() {
           const idleSeconds = (now - lastActivity) / 1000;
           const activity =
             idleSeconds < 10 ? 1 : Math.max(0.5, 1 - (idleSeconds - 10) / 8);
+          const renderingMode = fidelityModeRef.current
+            ? SYMBOL_RENDERING_MODES.fidelity
+            : SYMBOL_RENDERING_MODES.performance;
 
           pulses = pulses.filter((pulse) => now / 1000 - pulse.time < 10);
           symbols = symbols.filter(
-            (symbol) => now / 1000 - symbol.born < SYMBOL_LIFETIME_SEC,
+            (symbol) =>
+              now / 1000 - symbol.born < renderingMode.symbolLifetimeSec,
+          );
+          recentSymbolEvents = recentSymbolEvents.filter(
+            (event) =>
+              now / 1000 - event.born < renderingMode.symbolLifetimeSec,
           );
 
+          const countByType = (
+            events: Array<{ type: number; count?: number }>,
+            type: number,
+          ) =>
+            events.reduce(
+              (total, event) =>
+                event.type === type ? total + (event.count ?? 1) : total,
+              0,
+            );
+
           window.riverCounts = {
-            dns: symbols.filter((s) => s.type === EVENT_TYPES.dns).length,
-            tcp: symbols.filter((s) => s.type === EVENT_TYPES.tcp).length,
-            udp: symbols.filter((s) => s.type === EVENT_TYPES.udp).length,
-            portscan: symbols.filter((s) => s.type === EVENT_TYPES.portscan)
-              .length,
-            malformed: symbols.filter((s) => s.type === EVENT_TYPES.malformed)
-              .length,
-            hierarchy: symbols.filter((s) => s.type === EVENT_TYPES.hierarchy)
-              .length,
+            dns: {
+              visible: countByType(symbols, EVENT_TYPES.dns),
+              total: countByType(recentSymbolEvents, EVENT_TYPES.dns),
+            },
+            tcp: {
+              visible: countByType(symbols, EVENT_TYPES.tcp),
+              total: countByType(recentSymbolEvents, EVENT_TYPES.tcp),
+            },
+            udp: {
+              visible: countByType(symbols, EVENT_TYPES.udp),
+              total: countByType(recentSymbolEvents, EVENT_TYPES.udp),
+            },
+            portscan: {
+              visible: countByType(symbols, EVENT_TYPES.portscan),
+              total: countByType(recentSymbolEvents, EVENT_TYPES.portscan),
+            },
+            malformed: {
+              visible: countByType(symbols, EVENT_TYPES.malformed),
+              total: countByType(recentSymbolEvents, EVENT_TYPES.malformed),
+            },
+            hierarchy: {
+              visible: countByType(symbols, EVENT_TYPES.hierarchy),
+              total: countByType(recentSymbolEvents, EVENT_TYPES.hierarchy),
+            },
           };
 
           // Publish TCP intensity for vapor wave visualization
@@ -721,7 +809,11 @@ export default function CosmicRiver() {
           symbols.forEach((symbol) => {
             const age = now / 1000 - symbol.born;
             const fadeIn = p.constrain(age / 2.4, 0, 1);
-            const fadeOut = p.constrain(1 - age / SYMBOL_LIFETIME_SEC, 0, 1);
+            const fadeOut = p.constrain(
+              1 - age / renderingMode.symbolLifetimeSec,
+              0,
+              1,
+            );
             const fade = Math.pow(fadeIn * fadeOut, 1.1);
             const pulse = 1 + 0.15 * Math.sin(age * 3 + symbol.type);
             const isAlertSymbol =
@@ -854,11 +946,26 @@ export default function CosmicRiver() {
       socket.addEventListener("message", (event) => {
         try {
           const payload = JSON.parse(event.data);
+          if (
+            payload?.eventCounts &&
+            typeof payload.eventCounts === "object"
+          ) {
+            const now = performance.now() / 1000;
+            for (const [typeKey, count] of Object.entries(
+              payload.eventCounts as Record<string, unknown>,
+            )) {
+              const type = EVENT_TYPES[typeKey.toLowerCase()];
+              if (typeof type === "number" && typeof count === "number") {
+                recentSymbolEvents.unshift({ born: now, type, count });
+              }
+            }
+          }
           if (payload?.type) {
             addPulse({
               type: payload.type,
               strength: payload.strength,
               bytes: payload.bytes,
+              counted: payload.counted,
             });
           }
           // Bare byte-count messages from tshark bridge:
@@ -1093,35 +1200,28 @@ export default function CosmicRiver() {
             <h3 className="text-sm font-semibold text-slate-100">
               Vapor Controls
             </h3>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-slate-200">
+              <span>Hi-Fi</span>
               <button
                 type="button"
-                onClick={() => applyPreset("lean")}
-                className={`rounded border px-2 py-1 text-[11px] ${
-                  activePreset === "lean"
-                    ? "border-teal-300 bg-teal-400/20 text-teal-100 shadow-[0_0_0_1px_rgba(45,212,191,0.35)]"
-                    : "border-slate-600 text-slate-200 hover:border-teal-400/50 hover:text-teal-100"
+                role="switch"
+                aria-checked={fidelityMode}
+                aria-label="Hight Fidelity mode"
+                onClick={() => setFidelityEnabled(!fidelityMode)}
+                className={`relative h-6 w-11 rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70 ${
+                  fidelityMode
+                    ? "border-teal-300/70 bg-teal-400/35 shadow-[0_0_18px_rgba(45,212,191,0.22)]"
+                    : "border-slate-600 bg-slate-800/70 opacity-60"
                 }`}
               >
-                Lean
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset("heavy")}
-                className={`rounded border px-2 py-1 text-[11px] ${
-                  activePreset === "heavy"
-                    ? "border-teal-300 bg-teal-400/20 text-teal-100 shadow-[0_0_0_1px_rgba(45,212,191,0.35)]"
-                    : "border-slate-600 text-slate-200 hover:border-teal-400/50 hover:text-teal-100"
-                }`}
-              >
-                Heavy
+                <span
+                  className={`absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-slate-100 transition-transform ${
+                    fidelityMode ? "translate-x-5" : "translate-x-1"
+                  }`}
+                />
               </button>
             </div>
           </div>
-          <p className="mb-4 text-[12px] text-slate-400">
-            Use this to tune smoothness, density, and traffic mapping in real
-            time.
-          </p>
           <div className="space-y-4">
             <div className="space-y-2 rounded-lg border border-slate-800 p-3">
               <h4 className="text-[11px] font-semibold uppercase tracking-wide text-fuchsia-300">

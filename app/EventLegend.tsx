@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-type Counts = Record<string, number>;
 type LegendKey = "hierarchy" | "tcp" | "dns" | "udp" | "portscan" | "malformed";
+type CountValue = number | { visible: number; total: number };
+type Counts = Record<string, CountValue>;
 
 type LegendItem = {
   key: LegendKey;
@@ -77,6 +78,17 @@ const legendItems: LegendItem[] = [
     ],
   },
 ];
+
+const getCountDisplay = (value: CountValue | undefined) => {
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  const visible = value?.visible ?? 0;
+  const total = value?.total ?? visible;
+
+  return total > visible ? `${visible}/${total}` : String(visible);
+};
 
 function LegendIcon({ type }: { type: LegendKey }) {
   if (type === "hierarchy") {
@@ -196,7 +208,7 @@ export default function EventLegend() {
               </span>
               <span>{item.label}</span>
               <span className="ml-auto text-cyan-100/85">
-                {counts[item.key] ?? 0}
+                {getCountDisplay(counts[item.key])}
               </span>
             </button>
           </li>
